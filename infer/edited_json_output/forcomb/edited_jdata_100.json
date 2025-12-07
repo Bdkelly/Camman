@@ -1,0 +1,1110 @@
+[
+  {
+    "videos": {
+      "mlsvideo": {
+        "format": "mp4",
+        "path": "/Users/Ben/Documents/dever/python/ptorch/data/outframes/mlsvideo/imgs"
+      }
+    }
+  },
+  {
+    "frame_00435.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 443,
+        "y_min": 550,
+        "x_max": 505,
+        "y_max": 611
+      }
+    ]
+  },
+  {
+    "frame_00437.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 447,
+        "y_min": 533,
+        "x_max": 512,
+        "y_max": 594
+      }
+    ]
+  },
+  {
+    "frame_00445.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 765,
+        "y_min": 512,
+        "x_max": 827,
+        "y_max": 570
+      }
+    ]
+  },
+  {
+    "frame_00446.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 799,
+        "y_min": 515,
+        "x_max": 864,
+        "y_max": 572
+      }
+    ]
+  },
+  {
+    "frame_00447.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 840,
+        "y_min": 510,
+        "x_max": 901,
+        "y_max": 567
+      }
+    ]
+  },
+  {
+    "frame_00448.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 868,
+        "y_min": 508,
+        "x_max": 927,
+        "y_max": 567
+      }
+    ]
+  },
+  {
+    "frame_00449.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 890,
+        "y_min": 508,
+        "x_max": 952,
+        "y_max": 568
+      }
+    ]
+  },
+  {
+    "frame_00450.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 920,
+        "y_min": 514,
+        "x_max": 979,
+        "y_max": 573
+      }
+    ]
+  },
+  {
+    "frame_00451.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 940,
+        "y_min": 516,
+        "x_max": 1005,
+        "y_max": 576
+      }
+    ]
+  },
+  {
+    "frame_00466.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 698,
+        "y_min": 521,
+        "x_max": 766,
+        "y_max": 586
+      }
+    ]
+  },
+  {
+    "frame_00467.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 714,
+        "y_min": 524,
+        "x_max": 778,
+        "y_max": 588
+      }
+    ]
+  },
+  {
+    "frame_00469.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 731,
+        "y_min": 520,
+        "x_max": 800,
+        "y_max": 590
+      }
+    ]
+  },
+  {
+    "frame_00470.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 745,
+        "y_min": 527,
+        "x_max": 810,
+        "y_max": 589
+      }
+    ]
+  },
+  {
+    "frame_00471.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 756,
+        "y_min": 525,
+        "x_max": 821,
+        "y_max": 588
+      }
+    ]
+  },
+  {
+    "frame_00472.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 769,
+        "y_min": 523,
+        "x_max": 832,
+        "y_max": 587
+      }
+    ]
+  },
+  {
+    "frame_00473.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 778,
+        "y_min": 521,
+        "x_max": 846,
+        "y_max": 589
+      }
+    ]
+  },
+  {
+    "frame_00474.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 786,
+        "y_min": 524,
+        "x_max": 852,
+        "y_max": 589
+      }
+    ]
+  },
+  {
+    "frame_00475.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 797,
+        "y_min": 524,
+        "x_max": 860,
+        "y_max": 588
+      }
+    ]
+  },
+  {
+    "frame_00476.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 802,
+        "y_min": 526,
+        "x_max": 869,
+        "y_max": 591
+      }
+    ]
+  },
+  {
+    "frame_00477.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 808,
+        "y_min": 521,
+        "x_max": 884,
+        "y_max": 590
+      }
+    ]
+  },
+  {
+    "frame_00478.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 809,
+        "y_min": 522,
+        "x_max": 889,
+        "y_max": 588
+      }
+    ]
+  },
+  {
+    "frame_00504.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 799,
+        "y_min": 519,
+        "x_max": 868,
+        "y_max": 582
+      }
+    ]
+  },
+  {
+    "frame_00505.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 799,
+        "y_min": 525,
+        "x_max": 873,
+        "y_max": 587
+      }
+    ]
+  },
+  {
+    "frame_00506.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 796,
+        "y_min": 524,
+        "x_max": 870,
+        "y_max": 586
+      }
+    ]
+  },
+  {
+    "frame_00507.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 795,
+        "y_min": 523,
+        "x_max": 870,
+        "y_max": 588
+      }
+    ]
+  },
+  {
+    "frame_00509.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 785,
+        "y_min": 532,
+        "x_max": 860,
+        "y_max": 591
+      }
+    ]
+  },
+  {
+    "frame_00510.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 775,
+        "y_min": 535,
+        "x_max": 851,
+        "y_max": 594
+      }
+    ]
+  },
+  {
+    "frame_00525.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 804,
+        "y_min": 529,
+        "x_max": 879,
+        "y_max": 596
+      }
+    ]
+  },
+  {
+    "frame_00526.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 807,
+        "y_min": 529,
+        "x_max": 879,
+        "y_max": 596
+      }
+    ]
+  },
+  {
+    "frame_00527.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 809,
+        "y_min": 531,
+        "x_max": 881,
+        "y_max": 593
+      }
+    ]
+  },
+  {
+    "frame_00528.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 806,
+        "y_min": 530,
+        "x_max": 883,
+        "y_max": 595
+      }
+    ]
+  },
+  {
+    "frame_00534.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 844,
+        "y_min": 533,
+        "x_max": 913,
+        "y_max": 595
+      }
+    ]
+  },
+  {
+    "frame_00535.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 853,
+        "y_min": 535,
+        "x_max": 923,
+        "y_max": 598
+      }
+    ]
+  },
+  {
+    "frame_00538.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 901,
+        "y_min": 534,
+        "x_max": 966,
+        "y_max": 601
+      }
+    ]
+  },
+  {
+    "frame_00541.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 944,
+        "y_min": 545,
+        "x_max": 1015,
+        "y_max": 610
+      }
+    ]
+  },
+  {
+    "frame_00542.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 968,
+        "y_min": 546,
+        "x_max": 1038,
+        "y_max": 617
+      }
+    ]
+  },
+  {
+    "frame_00543.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 979,
+        "y_min": 551,
+        "x_max": 1046,
+        "y_max": 618
+      }
+    ]
+  },
+  {
+    "frame_00544.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 985,
+        "y_min": 556,
+        "x_max": 1056,
+        "y_max": 620
+      }
+    ]
+  },
+  {
+    "frame_00545.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 993,
+        "y_min": 558,
+        "x_max": 1057,
+        "y_max": 622
+      }
+    ]
+  },
+  {
+    "frame_00546.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 994,
+        "y_min": 551,
+        "x_max": 1066,
+        "y_max": 621
+      }
+    ]
+  },
+  {
+    "frame_00549.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 999,
+        "y_min": 546,
+        "x_max": 1081,
+        "y_max": 615
+      }
+    ]
+  },
+  {
+    "frame_00550.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1000,
+        "y_min": 547,
+        "x_max": 1082,
+        "y_max": 616
+      }
+    ]
+  },
+  {
+    "frame_00551.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1001,
+        "y_min": 548,
+        "x_max": 1078,
+        "y_max": 618
+      }
+    ]
+  },
+  {
+    "frame_00557.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1030,
+        "y_min": 563,
+        "x_max": 1102,
+        "y_max": 623
+      }
+    ]
+  },
+  {
+    "frame_00558.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1028,
+        "y_min": 566,
+        "x_max": 1098,
+        "y_max": 627
+      }
+    ]
+  },
+  {
+    "frame_00559.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1031,
+        "y_min": 569,
+        "x_max": 1102,
+        "y_max": 632
+      }
+    ]
+  },
+  {
+    "frame_00560.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1036,
+        "y_min": 572,
+        "x_max": 1111,
+        "y_max": 635
+      }
+    ]
+  },
+  {
+    "frame_00561.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1046,
+        "y_min": 573,
+        "x_max": 1110,
+        "y_max": 633
+      }
+    ]
+  },
+  {
+    "frame_00562.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1048,
+        "y_min": 573,
+        "x_max": 1114,
+        "y_max": 635
+      }
+    ]
+  },
+  {
+    "frame_00563.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1052,
+        "y_min": 575,
+        "x_max": 1118,
+        "y_max": 637
+      }
+    ]
+  },
+  {
+    "frame_00564.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1050,
+        "y_min": 576,
+        "x_max": 1118,
+        "y_max": 640
+      }
+    ]
+  },
+  {
+    "frame_00565.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1051,
+        "y_min": 577,
+        "x_max": 1123,
+        "y_max": 642
+      }
+    ]
+  },
+  {
+    "frame_00566.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1063,
+        "y_min": 576,
+        "x_max": 1128,
+        "y_max": 642
+      }
+    ]
+  },
+  {
+    "frame_00567.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1060,
+        "y_min": 577,
+        "x_max": 1134,
+        "y_max": 645
+      }
+    ]
+  },
+  {
+    "frame_00568.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1061,
+        "y_min": 579,
+        "x_max": 1136,
+        "y_max": 647
+      }
+    ]
+  },
+  {
+    "frame_00569.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1056,
+        "y_min": 581,
+        "x_max": 1128,
+        "y_max": 650
+      }
+    ]
+  },
+  {
+    "frame_00570.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1050,
+        "y_min": 581,
+        "x_max": 1119,
+        "y_max": 649
+      }
+    ]
+  },
+  {
+    "frame_00571.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1043,
+        "y_min": 584,
+        "x_max": 1113,
+        "y_max": 649
+      }
+    ]
+  },
+  {
+    "frame_00572.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1031,
+        "y_min": 588,
+        "x_max": 1106,
+        "y_max": 658
+      }
+    ]
+  },
+  {
+    "frame_00573.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1001,
+        "y_min": 587,
+        "x_max": 1084,
+        "y_max": 658
+      }
+    ]
+  },
+  {
+    "frame_00574.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 987,
+        "y_min": 586,
+        "x_max": 1066,
+        "y_max": 658
+      }
+    ]
+  },
+  {
+    "frame_00575.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 976,
+        "y_min": 588,
+        "x_max": 1052,
+        "y_max": 661
+      }
+    ]
+  },
+  {
+    "frame_00576.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 951,
+        "y_min": 588,
+        "x_max": 1035,
+        "y_max": 662
+      }
+    ]
+  },
+  {
+    "frame_00577.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 942,
+        "y_min": 596,
+        "x_max": 1017,
+        "y_max": 670
+      }
+    ]
+  },
+  {
+    "frame_00578.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 939,
+        "y_min": 602,
+        "x_max": 1012,
+        "y_max": 672
+      }
+    ]
+  },
+  {
+    "frame_00579.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 936,
+        "y_min": 602,
+        "x_max": 1005,
+        "y_max": 670
+      }
+    ]
+  },
+  {
+    "frame_00580.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 935,
+        "y_min": 604,
+        "x_max": 1005,
+        "y_max": 670
+      }
+    ]
+  },
+  {
+    "frame_00581.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 923,
+        "y_min": 607,
+        "x_max": 1003,
+        "y_max": 675
+      }
+    ]
+  },
+  {
+    "frame_00582.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 918,
+        "y_min": 608,
+        "x_max": 1006,
+        "y_max": 679
+      }
+    ]
+  },
+  {
+    "frame_00583.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 915,
+        "y_min": 612,
+        "x_max": 1001,
+        "y_max": 683
+      }
+    ]
+  },
+  {
+    "frame_00584.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 915,
+        "y_min": 613,
+        "x_max": 996,
+        "y_max": 682
+      }
+    ]
+  },
+  {
+    "frame_00585.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 914,
+        "y_min": 615,
+        "x_max": 994,
+        "y_max": 683
+      }
+    ]
+  },
+  {
+    "frame_00586.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 914,
+        "y_min": 616,
+        "x_max": 993,
+        "y_max": 682
+      }
+    ]
+  },
+  {
+    "frame_00587.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 907,
+        "y_min": 611,
+        "x_max": 998,
+        "y_max": 682
+      }
+    ]
+  },
+  {
+    "frame_00588.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 914,
+        "y_min": 610,
+        "x_max": 991,
+        "y_max": 675
+      }
+    ]
+  },
+  {
+    "frame_00589.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 911,
+        "y_min": 608,
+        "x_max": 987,
+        "y_max": 674
+      }
+    ]
+  },
+  {
+    "frame_00606.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1011,
+        "y_min": 612,
+        "x_max": 1078,
+        "y_max": 670
+      }
+    ]
+  },
+  {
+    "frame_00607.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1015,
+        "y_min": 613,
+        "x_max": 1088,
+        "y_max": 672
+      }
+    ]
+  },
+  {
+    "frame_00608.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1009,
+        "y_min": 613,
+        "x_max": 1089,
+        "y_max": 673
+      }
+    ]
+  },
+  {
+    "frame_00610.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1044,
+        "y_min": 616,
+        "x_max": 1116,
+        "y_max": 677
+      }
+    ]
+  },
+  {
+    "frame_00611.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1049,
+        "y_min": 615,
+        "x_max": 1125,
+        "y_max": 678
+      }
+    ]
+  },
+  {
+    "frame_00612.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1043,
+        "y_min": 612,
+        "x_max": 1121,
+        "y_max": 675
+      }
+    ]
+  },
+  {
+    "frame_00613.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1037,
+        "y_min": 613,
+        "x_max": 1123,
+        "y_max": 678
+      }
+    ]
+  },
+  {
+    "frame_00614.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1056,
+        "y_min": 614,
+        "x_max": 1151,
+        "y_max": 684
+      }
+    ]
+  },
+  {
+    "frame_00615.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1053,
+        "y_min": 613,
+        "x_max": 1137,
+        "y_max": 680
+      }
+    ]
+  },
+  {
+    "frame_00616.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1062,
+        "y_min": 616,
+        "x_max": 1131,
+        "y_max": 678
+      }
+    ]
+  },
+  {
+    "frame_00617.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1083,
+        "y_min": 616,
+        "x_max": 1156,
+        "y_max": 680
+      }
+    ]
+  },
+  {
+    "frame_00620.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1149,
+        "y_min": 610,
+        "x_max": 1211,
+        "y_max": 668
+      }
+    ]
+  },
+  {
+    "frame_00621.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1163,
+        "y_min": 602,
+        "x_max": 1224,
+        "y_max": 662
+      }
+    ]
+  },
+  {
+    "frame_00622.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1172,
+        "y_min": 602,
+        "x_max": 1230,
+        "y_max": 660
+      }
+    ]
+  },
+  {
+    "frame_00623.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1179,
+        "y_min": 601,
+        "x_max": 1236,
+        "y_max": 659
+      }
+    ]
+  },
+  {
+    "frame_00624.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1187,
+        "y_min": 594,
+        "x_max": 1247,
+        "y_max": 654
+      }
+    ]
+  },
+  {
+    "frame_00625.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1197,
+        "y_min": 591,
+        "x_max": 1258,
+        "y_max": 652
+      }
+    ]
+  },
+  {
+    "frame_00626.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1204,
+        "y_min": 591,
+        "x_max": 1265,
+        "y_max": 649
+      }
+    ]
+  },
+  {
+    "frame_00627.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1209,
+        "y_min": 590,
+        "x_max": 1270,
+        "y_max": 648
+      }
+    ]
+  },
+  {
+    "frame_00630.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1222,
+        "y_min": 578,
+        "x_max": 1286,
+        "y_max": 639
+      }
+    ]
+  },
+  {
+    "frame_00631.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1223,
+        "y_min": 576,
+        "x_max": 1286,
+        "y_max": 634
+      }
+    ]
+  },
+  {
+    "frame_00632.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1229,
+        "y_min": 576,
+        "x_max": 1292,
+        "y_max": 634
+      }
+    ]
+  },
+  {
+    "frame_00633.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1237,
+        "y_min": 574,
+        "x_max": 1306,
+        "y_max": 634
+      }
+    ]
+  },
+  {
+    "frame_00634.jpg": [
+      {
+        "Label": "Ball1",
+        "x_min": 1248,
+        "y_min": 571,
+        "x_max": 1311,
+        "y_max": 631
+      }
+    ]
+  }
+]

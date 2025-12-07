@@ -1,0 +1,32 @@
+[
+  {
+    "videos": {
+      "third_video_source": {
+        "format": "avi",
+        "path": "/path/to/third_video/frames"
+      }
+    }
+  },
+  {
+    "frame_00000.jpg": [
+      {
+        "Label": "NewBall",
+        "x_min": 10,
+        "y_min": 10,
+        "x_max": 20,
+        "y_max": 20
+      }
+    ]
+  },
+  {
+    "frame_00001.jpg": [
+      {
+        "Label": "NewBall",
+        "x_min": 30,
+        "y_min": 30,
+        "x_max": 40,
+        "y_max": 40
+      }
+    ]
+  }
+]

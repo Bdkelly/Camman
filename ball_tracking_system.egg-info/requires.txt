@@ -1,0 +1,8 @@
+numpy
+PyQt5
+albumentations
+torch
+torchvision
+opencv-python
+pyserial
+bleak
