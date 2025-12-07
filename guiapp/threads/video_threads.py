@@ -36,6 +36,7 @@ class VideoThread(QThread):
         self.ser = None 
         self.command_interval = 1.0 
         self.last_command_time = time.time()
+        self.prev_action = 0.0
 
         self.model = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

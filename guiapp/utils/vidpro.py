@@ -13,12 +13,34 @@ def track_control(thread_instance, detected_boxes, ser, W, H, command_interval, 
     if ser: 
         current_time = time.time()
         if current_time - thread_instance.last_command_time >= command_interval:
-            if agent is not None and state is not None:
-                action = agent.choose_action(state)
-                pan_action = action.flatten()[0]
-                send_agent_command(ser, pan_action, 0.0)
+            if getattr(thread_instance, 'agent', None):
+                dx = 0.0
+                dy = 0.0
+                is_detected = 0.0
+                
+                if detected_boxes:
+                    ball_box = detected_boxes[0]['box']
+                    ball_center_x = (ball_box[0] + ball_box[2]) / 2
+                    ball_center_y = (ball_box[1] + ball_box[3]) / 2
+                    
+                    dx = (ball_center_x - (W / 2)) / W
+                    dy = (ball_center_y - (H / 2)) / H
+                    is_detected = 1.0
+
+                prev_action = getattr(thread_instance, 'prev_action', 0.0)
+                
+                state = np.array([dx, dy, prev_action, is_detected], dtype=np.float32)
+                action = thread_instance.agent.choose_action(state)
+                
+                pan_action = action[0]
+                thread_instance.prev_action = pan_action
+                
+                command = f"P:{pan_action:.2f},T:{0.0:.2f}\n"
+                ser.write(command.encode('utf-8'))
+                thread_instance.command_log_signal.emit(f"RL Cmd: {command.strip()}")
+                
                 thread_instance.last_command_time = current_time
-                return action
+                return True
 
 
             elif detected_boxes:

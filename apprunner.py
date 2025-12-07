@@ -22,7 +22,7 @@ def main(command):
 
 if __name__ == "__main__":
     try:
-        command = "python3 -m guiapp.camman"
+        command = "python -m guiapp.camman"
         main(command)
     except:
         command = "python3 -m guiapp.camman"
