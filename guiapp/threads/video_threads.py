@@ -18,7 +18,7 @@ except ImportError:
     from utils.models import get_fasterrcnn_model_single_class as fmodel
 
 GLOBAL_CLASS_NAMES = ['__background__', 'Ball']
-AGENT_MODEL_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'RLAgent', 'models', 'actor_model.pth'))
+AGENT_MODEL_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), 'actormodels', 'actor_model.pth'))
 
 class VideoThread(QThread):
     change_pixmap_signal = pyqtSignal(QImage)
@@ -118,7 +118,7 @@ class VideoThread(QThread):
         self.command_log_signal.emit(f"--- CamMan Agent {'STARTED' if state else 'STOPPED'} ---")
 
 
-    # This slot receives the new command interval from the GUI and updates the interval variable safely
+    
     @pyqtSlot(float)
     def set_command_interval(self, interval):
         self.mutex.lock()
@@ -126,7 +126,6 @@ class VideoThread(QThread):
         self.mutex.unlock()
         self.command_log_signal.emit(f"Command Interval set to: {interval:.2f}s")
         
-    # This method converts an OpenCV image (numpy array) into a scaled QImage for display
     def _convert_cv_qt(self, cv_img):
         rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb_image.shape
