@@ -18,7 +18,7 @@ except ImportError:
     from utils.models import get_fasterrcnn_model_single_class as fmodel
 
 GLOBAL_CLASS_NAMES = ['__background__', 'Ball']
-AGENT_MODEL_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), 'actormodels', 'actor_model.pth'))
+AGENT_MODEL_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__),'..', 'actormodels', 'agent_model.pth'))
 
 class VideoThread(QThread):
     change_pixmap_signal = pyqtSignal(QImage)

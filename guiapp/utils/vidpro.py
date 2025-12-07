@@ -91,7 +91,7 @@ def init_video_comp(thread_instance, model_path=None):
                  model_path = os.path.join(models_dir, files[0])
     
     if not model_path:
-        legacy_path = r'/Users/Ben/Documents/dever/python/ptorch/models/fin_comb.pth'
+        legacy_path = os.path.abspath(os.path.join(os.path.dirname(__file__),'..', 'models', 'fin_comb.pth'))
         if os.path.exists(legacy_path):
             model_path = legacy_path
 
