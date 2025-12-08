@@ -18,7 +18,10 @@ except ImportError:
     from utils.models import get_fasterrcnn_model_single_class as fmodel
 
 GLOBAL_CLASS_NAMES = ['__background__', 'Ball']
-AGENT_MODEL_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__),'..', 'actormodels', 'agent_model.pth'))
+AGENT_MODEL_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__),'..', 'agentModel', 'agentModel.pth'))
+
+USE_RECORDED_VIDEO = True
+RECORDED_VIDEO_PATH = r"/Users/Ben/Documents/dever/python/ptorch/data/SmallVideo.MP4"
 
 class VideoThread(QThread):
     change_pixmap_signal = pyqtSignal(QImage)
@@ -40,8 +43,6 @@ class VideoThread(QThread):
 
         self.model = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
-
     def run(self):
    
         success, model, transform, ser_connection = init_video_comp(self)
@@ -55,8 +56,11 @@ class VideoThread(QThread):
         self.ser = ser_connection
 
         self.mutex.unlock()  
-
-        cap = cv2.VideoCapture(0)
+        if USE_RECORDED_VIDEO:
+            cap = cv2.VideoCapture(RECORDED_VIDEO_PATH)
+            self.command_log_signal.emit(f"Playing video: {RECORDED_VIDEO_PATH}")
+        else:
+            cap = cv2.VideoCapture(0)
         if not cap.isOpened():
             self.command_log_signal.emit("Error: Could not open video stream.")
             self._run_flag = False

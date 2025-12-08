@@ -13,7 +13,7 @@ def track_control(thread_instance, detected_boxes, ser, W, H, command_interval, 
     if ser: 
         current_time = time.time()
         if current_time - thread_instance.last_command_time >= command_interval:
-            if getattr(thread_instance, 'agent', None):
+            if agent:
                 dx = 0.0
                 dy = 0.0
                 is_detected = 0.0
@@ -33,17 +33,15 @@ def track_control(thread_instance, detected_boxes, ser, W, H, command_interval, 
                 action = thread_instance.agent.choose_action(state)
                 
                 pan_action = action[0]
+                print(pan_action)
                 thread_instance.prev_action = pan_action
                 
-                command = f"P:{pan_action:.2f},T:{0.0:.2f}\n"
-                ser.write(command.encode('utf-8'))
-                thread_instance.command_log_signal.emit(f"RL Cmd: {command.strip()}")
-                
+                command = f"P:{pan_action:.2f}"
+                send_agent_command(ser,command)
                 thread_instance.last_command_time = current_time
-                return True
-
-
+                return pan_action
             elif detected_boxes:
+                print("Ball")
                 ball_box = detected_boxes[0]['box']
                 ball_center_x = (ball_box[0] + ball_box[2]) / 2
                 screen_center_x = W / 2
@@ -192,7 +190,6 @@ def videorun(thread_instance, cap, W, H, model, transform, device, ser):
             current_model = getattr(thread_instance, 'model', model)
             agent = getattr(thread_instance, 'agent', None)
             thread_instance.mutex.unlock()
-
             if is_inference_active and current_model:
                 detected_boxes, frame_with_detections = get_ball_detection_external(
                     current_model, frame_to_display, transform, device
@@ -221,9 +218,8 @@ def videorun(thread_instance, cap, W, H, model, transform, device, ser):
                         agent=agent,
                         state=state
                     )
-                    
                     if returned_action is not None:
-                        prev_action = returned_action
+                        prev_action = np.array([returned_action])
 
                 frame_to_display = frame_with_detections
 

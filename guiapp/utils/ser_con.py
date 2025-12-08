@@ -16,9 +16,8 @@ def scan_port(port):
     else:
         return True
 
-def send_agent_command(ser, pan):
+def send_agent_command(ser, command):
     if ser:
-        command = f"P:{pan:.2f}"
         if _command_signal_ref: 
             _command_signal_ref.emit(command.strip())
         ser.write(command.encode('utf-8'))
@@ -34,22 +33,24 @@ def find_esp32():
             print(f"Checking port: {port.device} - {port.description}")
             if(scan_port(port)):
                 return "Serial Connection Valid: {port.name}"
-        return "No Valid Connection"
+        return "Connection"
     except:    
-        return "No Valid Connection"
+        return "Connection"
 
 def move_left(ser):
+    command = "P:0.5"
     if ser:
-        if _command_signal_ref: _command_signal_ref.emit("Left") # Use internal reference
-        ser.write(b"Left\n") 
+        if _command_signal_ref: _command_signal_ref.emit("Right") # Use internal reference
+        ser.write(command.encode('utf-8')) 
         print("Sent command: Left")
     else:
         print("Serial not connected: Left")
 
 def move_right(ser):
+    command = "P:1.5"
     if ser:
         if _command_signal_ref: _command_signal_ref.emit("Right") # Use internal reference
-        ser.write(b"Right\n") 
+        ser.write(command.encode('utf-8')) 
         print("Sent command: Right")
     else:
         print("Serial not connected: Right")

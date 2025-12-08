@@ -112,7 +112,6 @@ void setup() {
 }
 
 void loop() {
-    // 1. Check Serial (USB) Input from Python
     if (Serial.available() > 0) {
         String command = Serial.readStringUntil('\n');
         processCommand(command);
