@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from PyQt5.QtGui import QImage
-from guiapp.camman import VideoThread
+from guiapp.threads.video_threads import VideoThread
 
 class TestCamman(unittest.TestCase):
     def test_convert_cv_qt(self):

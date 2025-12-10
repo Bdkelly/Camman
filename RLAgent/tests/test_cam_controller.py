@@ -28,7 +28,7 @@ def env(mocker):
 def test_reset(env, mocker):
     mocker.patch('RLAgent.camController.get_ball_detection', return_value=([{'box': (100, 100, 200, 200)}], np.zeros((720, 1280, 3), dtype=np.uint8)))
     state, _ = env.reset()
-    assert state.shape == (3,)
+    assert state.shape == (4,)
     assert np.isclose(state[0], (150 - 640) / 1280)
     assert np.isclose(state[1], (150 - 360) / 720)
     assert state[2] == 0.0
@@ -37,12 +37,12 @@ def test_step(env, mocker):
     mocker.patch('RLAgent.camController.get_ball_detection', return_value=([{'box': (100, 100, 200, 200)}], np.zeros((720, 1280, 3), dtype=np.uint8)))
     action = np.array([0.5])
     next_state, reward, done, _, _ = env.step(action)
-    assert next_state.shape == (3,)
+    assert next_state.shape == (4,)
     assert not done
 
 def test_detect_ball(env, mocker):
     mocker.patch('RLAgent.camController.get_ball_detection', return_value=([{'box': (100, 100, 200, 200)}], np.zeros((720, 1280, 3), dtype=np.uint8)))
     env.current_frame = np.zeros((720, 1280, 3), dtype=np.uint8)
-    ball_x, ball_y, _ = env.detect_ball()
+    ball_x, ball_y, _ , _= env.detect_ball()
     assert ball_x == 150
     assert ball_y == 150
