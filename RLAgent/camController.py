@@ -1,6 +1,10 @@
 #Agent Calls
-from .ballfind import get_ball_detection
-from .reward import RewardSystem
+try:
+    from ballfind import get_ball_detection
+    from reward import RewardSystem
+except:
+    from .ballfind import get_ball_detection
+    from .reward import RewardSystem
 #Standard Calls
 import cv2
 import numpy as np

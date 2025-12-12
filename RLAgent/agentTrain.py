@@ -1,10 +1,18 @@
 #Agent Calls
-from .RLAgent import RLAgent
-from .camController import CameraControlEnv
-from .utils.models import get_fasterrcnn_model_single_class
-from .reward import RewardSystem
-from .utils.noise import OUNoise
-from .import config
+try:
+    from RLAgent import RLAgent
+    from camController import CameraControlEnv
+    from utils.models import get_fasterrcnn_model_single_class
+    from reward import RewardSystem
+    from utils.noise import OUNoise
+    import config
+except:
+    from .RLAgent import RLAgent
+    from .camController import CameraControlEnv
+    from .utils.models import get_fasterrcnn_model_single_class
+    from .reward import RewardSystem
+    from .utils.noise import OUNoise
+    from . import config
 
 #Standard Calls
 from albumentations.pytorch import ToTensorV2
