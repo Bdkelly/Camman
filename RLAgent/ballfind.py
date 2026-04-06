@@ -1,10 +1,51 @@
+"""
+ballfind — Single-frame ball detection for the RL training loop.
+
+Wraps the Faster R-CNN model inference into a single function that accepts
+a raw BGR frame, applies the albumentations transform pipeline, runs the
+detector, filters by confidence, rescales bounding boxes back to the
+original frame dimensions, and draws the result in-place.
+
+Only the highest-confidence detection is returned (``break`` after first hit),
+which is sufficient for single-ball tracking.
+"""
+
 import torch
 import cv2
 
 GLOBAL_CLASS_NAMES = ['__background__', 'Ball']
+
+
 def get_ball_detection(model, frame, transform, device, confidence_threshold=0.96):
+    """Detect the ball in a single frame and annotate it.
 
+    Converts the BGR frame to RGB, applies the albumentations transform
+    (resize + normalise + ToTensor), runs the detection model, filters
+    predictions by ``confidence_threshold``, rescales boxes from the
+    640×640 model input back to the original frame resolution, and draws
+    a red bounding box with a confidence label on the frame.
 
+    Only the first (highest-confidence) detection above the threshold is
+    returned and drawn.
+
+    Args:
+        model (torch.nn.Module): Faster R-CNN model in eval mode.
+        frame (np.ndarray): BGR image array of shape (H, W, 3). Modified
+            in-place with the drawn bounding box.
+        transform (albumentations.Compose): Transform pipeline that outputs
+            a dict with an ``'image'`` tensor key.
+        device (torch.device): Device on which the model and tensors reside.
+        confidence_threshold (float): Minimum score to accept a detection.
+            Default: 0.96.
+
+    Returns:
+        tuple[list[dict], np.ndarray]:
+            - ``detected_boxes``: List of dicts with keys ``'box'``
+              (x_min, y_min, x_max, y_max in original coords), ``'label'``
+              (class name string), and ``'score'`` (float). Empty list if
+              no detection passes the threshold.
+            - ``frame``: The input frame with bounding box drawn in-place.
+    """
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     transformed = transform(image=frame_rgb)
     image_tensor = transformed['image'].to(device).unsqueeze(0)

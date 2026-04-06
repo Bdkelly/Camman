@@ -1,3 +1,24 @@
+"""
+vidpro — Video processing and tracking control utilities for the GUI.
+
+This module provides three layers of functionality:
+
+1. **Tracking control** (``track_control``): Decides what serial command to send
+   based on whether the DDPG agent is active or the simpler rule-based tracker
+   should be used. Respects the configurable ``command_interval`` throttle.
+
+2. **Model management** (``load_model_from_path``, ``init_video_comp``): Loads
+   the Faster R-CNN detection model, builds the albumentations transform pipeline,
+   and attempts a serial connection to the ESP32.
+
+3. **Main video loop** (``videorun``): Continuously reads frames, optionally runs
+   detection and agent control, converts frames for Qt display, and handles
+   resource cleanup on exit.
+
+4. **Detection helper** (``get_ball_detection_external``): A duplicate of the
+   ``ballfind`` detection function kept here for use within the GUI context.
+"""
+
 import cv2
 import time
 import torch
@@ -9,8 +30,37 @@ from guiapp.utils.ser_con import move_left, move_right, find_esp32, set_command_
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
+
 def track_control(thread_instance, detected_boxes, ser, W, H, command_interval, agent=None, state=None):
-    if ser: 
+    """Issue a single serial command based on the current detection and agent state.
+
+    Enforces a minimum ``command_interval`` between commands. Two modes:
+
+    - **Agent mode** (``agent`` is not None): Builds a 4-D state from the
+      detected ball position and queries the DDPG actor for a continuous pan
+      command sent as ``"P:<value>"``.
+    - **Rule-based mode**: Sends ``move_left``, ``move_right``, or ``Stop``
+      depending on whether the ball centre is left/right of the frame centre
+      by more than 50 pixels.
+
+    Does nothing if ``ser`` is None (no serial connection).
+
+    Args:
+        thread_instance: The ``VideoThread`` instance (provides ``last_command_time``,
+            ``prev_action``, ``agent``, and ``command_log_signal``).
+        detected_boxes (list[dict]): Detection results from ``get_ball_detection_external``.
+        ser (serial.Serial | None): Open serial connection, or None.
+        W (int): Frame width in pixels.
+        H (int): Frame height in pixels.
+        command_interval (float): Minimum seconds between commands.
+        agent (RLAgent | None): DDPG agent to use, or None for rule-based control.
+        state (np.ndarray | None): Pre-computed state vector (unused; state is
+            recomputed internally). Kept for API compatibility.
+
+    Returns:
+        float | None: The pan action value sent (agent mode), or None.
+    """
+    if ser:
         current_time = time.time()
         if current_time - thread_instance.last_command_time >= command_interval:
             if agent:
@@ -59,6 +109,21 @@ def track_control(thread_instance, detected_boxes, ser, W, H, command_interval, 
         return None
 
 def load_model_from_path(model_path, device, thread_instance=None):
+    """Load a Faster R-CNN model from a checkpoint file.
+
+    Constructs a 2-class Faster R-CNN model and, if ``model_path`` points to
+    an existing file, loads its state dict. Falls back to the base pre-trained
+    model if the file is missing. Always sets the model to eval mode.
+
+    Args:
+        model_path (str | None): Path to a ``.pth`` state dict file.
+        device (torch.device): Device on which the model is placed.
+        thread_instance: Optional ``VideoThread`` for emitting log messages.
+            If None, errors are only printed to stdout.
+
+    Returns:
+        torch.nn.Module: The detection model in eval mode.
+    """
     GLOBAL_CLASS_NAMES = ['__background__', 'Ball']
     num_classes = len(GLOBAL_CLASS_NAMES)
     model = fmodel(num_classes).to(device)
@@ -79,6 +144,27 @@ def load_model_from_path(model_path, device, thread_instance=None):
     return model
 
 def init_video_comp(thread_instance, model_path=None):
+    """Initialise all video pipeline components for the GUI.
+
+    Steps:
+    1. Register the thread's ``command_log_signal`` so serial helpers can emit logs.
+    2. Resolve ``model_path``: look in the ``guiapp/models/`` directory if not provided.
+    3. Load the detection model via ``load_model_from_path``.
+    4. Build the albumentations transform (resize to 640×640, normalise, ToTensor).
+    5. Scan serial ports for the ESP32 and open a connection at 115200 baud.
+
+    Args:
+        thread_instance: The ``VideoThread`` instance that will use these components.
+        model_path (str | None): Explicit path to a ``.pth`` model file. If None,
+            the first ``.pth`` file found in ``guiapp/models/`` is used.
+
+    Returns:
+        tuple[bool, torch.nn.Module | None, albumentations.Compose | None, serial.Serial | None]:
+            - ``success``: False if model initialisation raised an exception.
+            - ``model``: Loaded detection model in eval mode, or None on failure.
+            - ``transform``: Albumentations transform pipeline, or None on failure.
+            - ``ser``: Open serial connection to ESP32, or None if not found/failed.
+    """
     set_command_signal(thread_instance.command_log_signal)
 
     if not model_path:
@@ -174,7 +260,28 @@ def get_ball_detection_external(model, frame, transform, device, confidence_thre
     return detected_boxes, frame
 
 def videorun(thread_instance, cap, W, H, model, transform, device, ser):
+    """Main video processing loop — runs until ``thread_instance._run_flag`` is False.
 
+    On each iteration:
+    1. Read a frame from ``cap``.
+    2. If inference is active, run ball detection.
+    3. If the agent is also active, compute state and call ``track_control``
+       with the DDPG agent to issue a pan command.
+    4. Convert the (optionally annotated) frame to QImage and emit it.
+    5. Sleep ~30 ms to cap CPU usage at ~33 fps.
+
+    Releases ``cap`` and closes the serial port on exit.
+
+    Args:
+        thread_instance: The ``VideoThread`` driving this loop.
+        cap (cv2.VideoCapture): Opened video source.
+        W (int): Frame width in pixels.
+        H (int): Frame height in pixels.
+        model (torch.nn.Module): Detection model in eval mode.
+        transform (albumentations.Compose): Image preprocessing transform.
+        device (torch.device): Compute device.
+        ser (serial.Serial | None): Open serial connection, or None.
+    """
     prev_action = np.zeros(1)
     screen_center_x = W / 2
     screen_center_y = H / 2
