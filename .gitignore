@@ -1,5 +1,35 @@
+# Python and local environments
 __pycache__/
-*.pyc
-*.pth
+*.py[cod]
+.venv/
+venv/
+env/
+# Build and test outputs
 build/
-*egg.info/
+dist/
+*.egg-info/
+*.egg
+.coverage*
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+# Local datasets, trained models and outputs
+/data/
+/models/
+/artifacts/
+/checkpoints/
+/logs/
+/runs/
+*.pth
+*.pt
+*.onnx
+*.ncnn.param
+*.ncnn.bin
+*.mp4
+*.MP4
+*.avi
+*.mov
+# OS/editor files
+.DS_Store
+Thumbs.db
+*.swp

@@ -1,0 +1,1 @@
+"""Camman training detection components."""
