@@ -8,16 +8,31 @@ the same detector and actor definitions.
 
 | Directory | Responsibility | Entry point |
 | --- | --- | --- |
-| `frontend/` | PyQt windows, video presentation, UI signals and worker adapter | `camman` or `python -m frontend` |
-| `backend/` | Detector inference, actor inference, tracking control, serial/Bluetooth, firmware | Imported by the frontend; diagnostics in `backend.tools` |
-| `training/` | Detector training, reinforcement learning, annotation review, data cleaning and video tools | `camman-train`, `camman-train-agent`, `camman-clean`, `camman-annotate` |
+| [frontend/](frontend/README.md) | PyQt windows, video presentation, UI signals and worker adapter | `camman` or `python -m frontend` |
+| [backend/](backend/README.md) | Detector inference, actor inference, tracking control, serial/Bluetooth, firmware | Imported by the frontend; diagnostics in `backend.tools` |
+| [training/](training/README.md) | Detector training, reinforcement learning, annotation review, data cleaning and video tools | `camman-train`, `camman-train-agent`, `camman-clean`, `camman-annotate` |
 
 The frontend and training tools depend on the backend. The backend does not
 import Qt, training code, or Albumentations. The live application loads only the
 actor network; critics, optimizers and replay buffers stay in `training/`.
 Tests live inside each component's `tests/` directory.
 
+New to the project? Start with the frontend guide to run a video, the training
+guide to build your first detector, or the backend guide to integrate inference
+into Python code. Each guide explains its inputs, outputs, connections and
+current limitations.
+
 ## Install
+
+For a fresh checkout of the development branch:
+
+```sh
+git clone --branch dev https://github.com/Bdkelly/Camman.git
+cd Camman
+```
+
+Run the setup and component commands from this repository root, where
+`pyproject.toml` lives. If you already have a checkout, use that copy.
 
 Use Python 3.10 or newer in a virtual environment (validation uses Python 3.12).
 Install a matching PyTorch/torchvision build for your hardware first using the
@@ -81,7 +96,8 @@ Detector training supports `--batch-size`, `--workers`, `--device` and
 `--no-pretrained`. The default initializes from COCO weights and may download
 them; loading an existing checkpoint for inference never requests those weights.
 Agent training supports `--episodes` and `--steps` and saves best/final actors
-and critics. See `training/README.md` for annotation formats and review commands.
+and critics. Follow the [training walkthrough](training/README.md) for labeling,
+cleaning, training, reviewing results and using the saved weights in the app.
 
 ## Development
 

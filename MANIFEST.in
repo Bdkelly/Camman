@@ -1,5 +1,5 @@
 include README.md pytest.ini runtests.bat
-include training/README.md
+include frontend/README.md backend/README.md training/README.md
 recursive-include backend/tests *.py
 recursive-include frontend/tests *.py
 recursive-include training/tests *.py
