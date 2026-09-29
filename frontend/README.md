@@ -19,17 +19,23 @@ flowchart TD
     Source["Camera or video file"] --> Worker
     Worker -->|Detection and tracking calls| Core["Backend"]
     Core -->|Serial commands| Hardware["ESP32: optional"]
-    Worker -->|Video images and log messages| UI
+    Worker -->|Latest preview, logs and status| UI
 ```
 
 The worker opens the video source, loads detector/actor weights through the
 backend, and processes frames. With inference enabled, the backend returns ball
 boxes and draws them on the frame. With tracking also enabled, it can send pan
-commands to the connected ESP32. Qt signals carry images and log messages back
-to the window. Closing the app stops the worker and releases its video and serial
-connections.
+commands to the connected ESP32. A backend capture thread drains live video into
+one waiting frame; file playback retains every frame. The window polls a single
+preview image with a Qt timer, so a slow UI cannot build a queue of images. Qt
+signals carry logs and performance status. Closing stops the workers and closes
+the video/serial connections when active native operations finish.
 
 ## Install
+
+For **Jetson Orin Nano Super**, use the [Jetson installation guide](../backend/JETSON.md)
+instead of the generic pip installation below. It preserves the native
+CUDA-enabled torch/torchvision pair and GStreamer-enabled OpenCV.
 
 Start in the repository root, the directory containing `pyproject.toml`, rather
 than inside `frontend/`. See the [project setup](../README.md#install) if you
@@ -89,15 +95,36 @@ for protocol and firmware details.
 
 | Option | Meaning | Default |
 | --- | --- | --- |
-| `--source` | Numeric camera index or video file path | Camera `0` |
+| `--source` | Camera index, video path, URL or GStreamer pipeline | Camera `0` |
 | `--model` | Ball-detector checkpoint | First alphabetically sorted `.pth` in the model directory, if present |
 | `--actor` | Optional camera-control actor checkpoint | Basic tracking rules |
 | `--serial-port` | Explicit port, or `auto` to probe | No platform connection |
 | `--device` | PyTorch device, such as `cpu` or `cuda:0` | CUDA if available, otherwise CPU |
+| `--profile` | `auto`, `standard`, or `jetson` runtime settings | Detect Jetson from its device tree |
+| `--precision` | `auto`, `fp32`, or CUDA `fp16` autocast | FP16 on Jetson CUDA; FP32 elsewhere |
+| `--detector-size` | Actual detector input size, a multiple of 32 from 128 to 1536 | Jetson: 640; standard: 800 |
+| `--preview-fps` | Preview production ceiling | Jetson: 15; standard: 30 |
+| `--inference-fps` | Inference ceiling; `0` removes this cap | Jetson: 15; standard: unlimited |
+| `--cpu-threads` | Torch thread count; also limits OpenCV to one thread | Jetson: 2; standard: library default |
+| `--capture-backend` | `auto`, `gstreamer`, `v4l2`, or `ffmpeg` | OpenCV auto selection |
+| `--source-mode` | `live` drops old frames, `file` keeps all, `auto` classifies the source | Cameras/URLs/pipelines: live; paths: file |
+| `--capture-width`, `--capture-height`, `--capture-fps` | Requested camera settings; drivers can ignore them | Source default |
 
 Use `camman --help` to check the installed command's options. Source, actor,
 device and serial port are selected at startup; restart the app to change them.
 The Models window can change the detector while the video worker is running.
+
+The Jetson profile is designed for the Orin Nano Super's shared compute/memory
+budget. Smaller inputs and FP16 need an accuracy check on your footage. See the
+[Jetson guide](../backend/JETSON.md) for hardware-decoding pipelines, benchmarks,
+power/cooling considerations and fallback settings. Explicit pipelines default
+to live mode; use `--source-mode file` for a file pipeline.
+
+The status line reports preview production and detection FPS, last detection
+latency, frame age since OpenCV returned it, and application capture drops.
+Preview FPS is a cap: with inference enabled, video follows detector cadence.
+Live frames are skipped to stay current; file playback slows down to retain
+every frame. The performance readout is not a model accuracy measurement.
 
 ## Controls and model storage
 
@@ -105,10 +132,13 @@ The Models window can change the detector while the video worker is running.
 | --- | --- |
 | **Start/Stop Inference** | Enables/disables ball detection; preview continues |
 | **Start/Stop CamMan Agent** | Enables/disables automatic control while inference runs |
-| **Manual Left / Manual Right** | Sends a command through the current serial connection |
+| **Manual Left / Manual Right** | Requests a serial command, sent between worker inference calls; rapid clicks retain the newest request |
 | **Command Interval** | Sets the minimum interval between automatic commands: 0.1–2.0 seconds, initially 1.0 |
 | **Models** | Copies detector weights into the model directory and requests a model load |
 | **Platform** | Scans wired/Bluetooth availability; it does not replace the active serial connection |
+
+Preview conversion resizes before copying into Qt, manual commands never write
+serial on the UI thread, and the log retains the latest 500 text blocks.
 
 The model directory is `~/.camman/models`, or
 `%USERPROFILE%\.camman\models` on Windows. Override it before launching:

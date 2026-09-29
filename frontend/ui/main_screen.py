@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QFont, QImage, QPixmap
 from PyQt5.QtWidgets import (
     QGroupBox,
@@ -12,7 +12,6 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from backend.hardware.serial_connection import move_left, move_right
 from frontend.platform_screen import PlatformWindow
 from frontend.threads.video_threads import VideoThread
 from frontend.ui.model_menu import ModelWindow
@@ -36,6 +35,10 @@ class MainWindow(QMainWindow):
         self._setup_layout()
         self._connect_signals()
 
+        self.preview_timer = QTimer(self)
+        self.preview_timer.setInterval(max(1, round(1000 / self.thread.runtime.preview_fps)))
+        self.preview_timer.timeout.connect(self.refresh_preview)
+        self.preview_timer.start()
         self.thread.start()
 
     def _create_widgets(self):
@@ -58,6 +61,7 @@ class MainWindow(QMainWindow):
 
         self.log_display = QTextEdit()
         self.log_display.setReadOnly(True)
+        self.log_display.document().setMaximumBlockCount(500)
         self.log_display.setMinimumWidth(250)
         self.log_display.setMaximumHeight(550)
         self.log_display.setFont(QFont("Courier", 10))
@@ -73,6 +77,8 @@ class MainWindow(QMainWindow):
 
         self.manual_left_button = QPushButton("Manual Left")
         self.manual_right_button = QPushButton("Manual Right")
+        self.performance_label = QLabel("Video starting…")
+        self.performance_label.setWordWrap(True)
 
     # Organizes the UI components into layouts
     def _setup_layout(self):
@@ -82,6 +88,7 @@ class MainWindow(QMainWindow):
 
         video_control_v_layout = QVBoxLayout()
         video_control_v_layout.addWidget(self.image_label)
+        video_control_v_layout.addWidget(self.performance_label)
         video_control_v_layout.addWidget(self.control_button)
         video_control_v_layout.addWidget(self.agent_control_button)
         video_control_v_layout.addWidget(self.platform_button)
@@ -113,11 +120,9 @@ class MainWindow(QMainWindow):
         self.interval_slider.valueChanged.connect(self.update_interval_ui)
         self.interval_slider.valueChanged.connect(self.update_interval_thread)
 
-        self.manual_left_button.clicked.connect(
-            lambda: move_left(self.thread.ser, self.update_log_display)
-        )
+        self.manual_left_button.clicked.connect(lambda: self.thread.request_manual_command("Left"))
         self.manual_right_button.clicked.connect(
-            lambda: move_right(self.thread.ser, self.update_log_display)
+            lambda: self.thread.request_manual_command("Right")
         )
 
         self.inference_toggle_signal.connect(self.thread.toggle_inference)
@@ -125,7 +130,8 @@ class MainWindow(QMainWindow):
         self.command_interval_update_signal.connect(self.thread.set_command_interval)
         self.update_model_signal.connect(self.thread.update_model)
 
-        self.thread.change_pixmap_signal.connect(self.update_image)
+        self.thread.stats_signal.connect(self.performance_label.setText)
+        self.thread.finished.connect(self.on_video_finished)
         self.thread.command_log_signal.connect(self.update_log_display)
 
     @pyqtSlot(str)
@@ -135,6 +141,18 @@ class MainWindow(QMainWindow):
     @pyqtSlot(QImage)
     def update_image(self, qt_img):
         self.image_label.setPixmap(QPixmap.fromImage(qt_img))
+
+    @pyqtSlot()
+    def refresh_preview(self):
+        image = self.thread.take_preview()
+        if image is not None:
+            self.update_image(image)
+
+    @pyqtSlot()
+    def on_video_finished(self):
+        self.refresh_preview()
+        self.preview_timer.stop()
+        self.performance_label.setText("Video stopped")
 
     def open_platform_menu(self):
         self.platform_menu = PlatformWindow(self)
@@ -171,6 +189,7 @@ class MainWindow(QMainWindow):
         self.command_interval_update_signal.emit(value / 10.0)
 
     def closeEvent(self, event):
+        self.preview_timer.stop()
         self.thread.stop()
         if hasattr(self, "platform_menu"):
             self.platform_menu.close()

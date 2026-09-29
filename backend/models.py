@@ -26,7 +26,7 @@ def _restore_frozen_batch_norm(module):
             _restore_frozen_batch_norm(child)
 
 
-def load_model_from_path(model_path, device):
+def load_model_from_path(model_path, device, *, detector_size=None):
     """Load a raw state dict or a detector training checkpoint without downloads.
 
     Missing/incompatible weights raise an error instead of silently running a
@@ -45,4 +45,9 @@ def load_model_from_path(model_path, device):
     if not any(key.endswith("num_batches_tracked") for key in state_dict):
         _restore_frozen_batch_norm(model)
     model.load_state_dict(state_dict)
+    if detector_size is not None:
+        # FrameTransform supplies square inputs. Set torchvision's actual resize,
+        # otherwise a 640px input is enlarged to 800px before the backbone.
+        model.transform.min_size = (detector_size,)
+        model.transform.max_size = detector_size
     return model.to(device).eval()

@@ -27,6 +27,10 @@ to a Qt signal.
 
 ## Install and run
 
+For **Jetson Orin Nano Super**, follow the [native installation and tuning
+guide](JETSON.md). It avoids replacing Jetson's CUDA/vision binaries with generic
+pip wheels and includes USB, CSI and hardware-decoded video examples.
+
 Use the [project setup instructions](../README.md#install) to create and activate
 an environment. Run these commands from the repository root. If using NVIDIA,
 install a matching CUDA-enabled PyTorch/torchvision pair with the
@@ -38,8 +42,9 @@ python -m backend.tools.check_device
 ```
 
 This installs the backend dependencies without the Qt or training extras.
-`check_device` reports the PyTorch version, CUDA availability and GPU name when
-available. It is a device diagnostic, not a performance benchmark.
+`check_device` reports PyTorch/torchvision/OpenCV versions, CUDA availability,
+GPU name and GStreamer support. Add `--device cuda --verify-ops` to execute NMS
+and ROIAlign on the GPU. It is a device diagnostic, not a performance benchmark.
 
 For the complete application, install `.[frontend]` and launch `camman` as
 described in the [frontend guide](../frontend/README.md).
@@ -113,6 +118,52 @@ training and preprocessing must therefore be coordinated with inference and
 model retraining; do not change this convention for just one component.
 There is currently no NCNN/ONNX/TensorRT loading path.
 
+## Deployment profiles and measurement
+
+[runtime.py](runtime.py) contains application-only settings. Jetson auto-detection
+selects CUDA FP16 autocast, 640px internal detector inputs, two Torch CPU threads
+and one OpenCV thread. Standard deployment keeps FP32 and 800px detector input.
+Explicit options override these defaults; training does not apply the profile.
+The external 640px preprocessing and checkpoint normalization stay unchanged.
+
+To apply the same profile from Python:
+
+```python
+from backend.runtime import resolve_runtime
+
+runtime = resolve_runtime(profile="jetson", device="cuda")
+runtime.apply()
+model = load_model_from_path(
+    "artifacts/detector_v1/trained_model_final.pth",
+    runtime.device,
+    detector_size=runtime.detector_size,
+)
+detections, annotated = get_ball_detection(
+    model, frame, FrameTransform(), runtime.device, precision=runtime.precision
+)
+```
+
+This continues the imports/frame setup in the earlier Python example. The model
+loader's default `detector_size=None` and detection's default `precision="fp32"`
+preserve existing training/annotation callers. FP16 requires CUDA. Compare
+detection accuracy after changing resolution or precision.
+
+[capture.py](capture.py) opens explicit OpenCV/GStreamer backends and provides
+`FrameReader`: live sources retain one newest waiting frame; files apply back
+pressure and preserve order. Capture owns read/release on its reader thread.
+[tools/benchmark.py](tools/benchmark.py) measures batch-one inference without
+Qt or motors:
+
+```sh
+python -m backend.tools.benchmark --profile jetson --device cuda --source data/game_01/game.mp4 --model artifacts/detector_v1/trained_model_final.pth --frames 200 --output artifacts/benchmarks/jetson.json
+```
+
+Warmup is excluded; CUDA is synchronized for timing. Reports include mean/p50/
+p95 detection time, capture time, sequential throughput and peak PyTorch CUDA
+allocation. This is not GUI FPS, total board RAM usage, or an accuracy score.
+See [the Jetson guide](JETSON.md#benchmark-and-tune) for a baseline comparison
+and the remaining hardware validation.
+
 ## Tracking and actor inference
 
 `TrackingController.update(boxes, ser, width, height, interval, agent=None,
@@ -183,8 +234,9 @@ remain unfinished.
 | [actor.py](actor.py), [policy.py](policy.py) | Shared actor architecture and inference-only wrapper |
 | [tracking.py](tracking.py) | Rate-limited control and four-value actor state |
 | [config.py](config.py) | Writable detector directory and `CAMMAN_MODELS_DIR` override |
+| [runtime.py](runtime.py), [capture.py](capture.py) | Deployment profiles and bounded camera/file capture |
 | [hardware/](hardware/) | Serial commands, port probing and Bluetooth helpers |
-| [tools/](tools/) | Device and platform diagnostics |
+| [tools/](tools/) | Device/platform diagnostics and detector benchmarking |
 | [firmware/](firmware/) | Preserved ESP32 source variants |
 | [tests/](tests/) | Model, transport, tracking and component-boundary checks |
 

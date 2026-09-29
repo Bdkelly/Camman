@@ -24,6 +24,11 @@ current limitations.
 
 ## Install
 
+**Jetson Orin Nano Super:** follow the [Jetson deployment guide](backend/JETSON.md)
+for the native CUDA/OpenCV installation, runtime profile, hardware video input
+and on-device benchmarks. Its installation steps replace the generic pip steps
+below so the Jetson binary packages are retained.
+
 For a fresh checkout of the development branch:
 
 ```sh
@@ -63,9 +68,11 @@ camman --source 0
 camman --source /path/to/game.mp4 --model /path/to/detector.pth
 camman --source 0 --model /path/to/detector.pth --actor /path/to/actor.pth --serial-port COM3
 python -m backend.tools.check_device
+camman --profile jetson --device cuda --source 0 --model /path/to/detector.pth
 ```
 
-`--source` accepts a camera index or video path. `--device cpu` or `--device
+`--source` accepts a camera index, video path, URL, or an explicit GStreamer
+pipeline with `--capture-backend gstreamer`. `--device cpu` or `--device
 cuda:0` overrides automatic device selection. The app starts in video preview;
 use **Start Inference** and **Start CamMan Agent** when ready. Without an actor,
 tracking uses left/right/stop rules. Hardware is optional: pass an explicit port

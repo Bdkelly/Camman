@@ -71,6 +71,80 @@ def test_legacy_preprocessing_matches_training():
     torch.testing.assert_close(FrameTransform()(image=image)["image"], legacy, atol=1e-6, rtol=1e-6)
 
 
+def test_resize_before_color_conversion_preserves_checkpoint_preprocessing():
+    import cv2
+
+    frame = np.random.default_rng(4).integers(0, 256, (1080, 1920, 3), dtype=np.uint8)
+    transform = FrameTransform()
+    expected = transform(image=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))["image"]
+    torch.testing.assert_close(transform.from_bgr(frame)["image"], expected, rtol=0, atol=0)
+
+
+def test_fp16_is_cuda_only():
+    with pytest.raises(ValueError, match="CUDA"):
+        get_ball_detection(
+            Mock(), np.zeros((10, 10, 3), dtype=np.uint8), FrameTransform(), "cpu", precision="fp16"
+        )
+
+
+def test_half_score_does_not_round_down_the_confidence_threshold():
+    # FP16's nearest representation of .98 is slightly below the FP32 threshold.
+    model = Mock(
+        return_value=[
+            {
+                "boxes": torch.tensor([[5, 5, 10, 10]], dtype=torch.float16),
+                "labels": torch.tensor([1]),
+                "scores": torch.tensor([0.98], dtype=torch.float16),
+            }
+        ]
+    )
+    boxes, _ = get_ball_detection(
+        model,
+        np.zeros((640, 640, 3), dtype=np.uint8),
+        FrameTransform(),
+        "cpu",
+        confidence_threshold=0.98,
+    )
+    assert boxes == []
+
+
+def test_cuda_path_uses_autocast_and_converts_half_outputs(mocker):
+    amp = mocker.patch("backend.detection.torch.autocast")
+    mocker.patch.object(torch.Tensor, "to", lambda self, *args, **kwargs: self)
+    model = Mock(
+        return_value=[
+            {
+                "boxes": torch.tensor([[5, 5, 10, 10], [20, 20, 30, 30]], dtype=torch.float16),
+                "labels": torch.tensor([1, 1]),
+                "scores": torch.tensor([0.99, 0.99], dtype=torch.float16),
+            }
+        ]
+    )
+    boxes, _ = get_ball_detection(
+        model,
+        np.zeros((640, 640, 3), dtype=np.uint8),
+        FrameTransform(),
+        "cuda",
+        precision="fp16",
+        draw=False,
+    )
+    amp.assert_called_once_with("cuda", dtype=torch.float16)
+    assert len(boxes) == 1 and boxes[0]["box"] == (5, 5, 10, 10)
+
+
+def test_runtime_resize_changes_actual_backbone_input(tmp_path, mocker):
+    from torchvision.models.detection.transform import GeneralizedRCNNTransform
+
+    model = torch.nn.Module()
+    model.transform = GeneralizedRCNNTransform(800, 1333, [0, 0, 0], [1, 1, 1])
+    path = tmp_path / "resize.pth"
+    torch.save(model.state_dict(), path)
+    mocker.patch("backend.models.get_fasterrcnn_model_single_class", return_value=model)
+    loaded = load_model_from_path(path, "cpu", detector_size=640)
+    images, _ = loaded.transform([torch.zeros(3, 640, 640)])
+    assert images.tensors.shape == (1, 3, 640, 640)
+
+
 @pytest.mark.parametrize("frozen", [True, False])
 def test_checkpoint_preserves_backbone_normalization(tmp_path, mocker, frozen):
     from torchvision.ops.misc import FrozenBatchNorm2d

@@ -32,10 +32,9 @@ def test_video_eof_releases_capture_and_serial(video_thread, mocker):
         return_value=Mock(glob=Mock(return_value=[])),
     )
     mocker.patch("frontend.threads.video_threads.open_connection", return_value=serial)
-    frames = []
-    video_thread.change_pixmap_signal.connect(frames.append)
     video_thread.run()
-    assert len(frames) == 1
+    assert isinstance(video_thread.take_preview(), QImage)
+    assert video_thread.take_preview() is None
     cap.release.assert_called_once()
     serial.close.assert_called_once()
     assert not video_thread._run_flag
@@ -57,6 +56,8 @@ def test_camera_failure_releases_capture(video_thread, mocker):
 def test_inference_exception_closes_resources(video_thread, mocker):
     cap, serial = Mock(), Mock()
     cap.isOpened.return_value = True
+    cap.get.return_value = 30
+    cap.read.return_value = (False, None)
     mocker.patch("frontend.threads.video_threads.cv2.VideoCapture", return_value=cap)
     mocker.patch(
         "frontend.threads.video_threads.models_directory",
@@ -116,3 +117,75 @@ def test_stop(video_thread, mocker):
     video_thread.stop()
     assert not video_thread._run_flag
     wait.assert_called_once()
+
+
+def test_preview_mailbox_retains_only_newest_image(video_thread):
+    video_thread.publish_preview(np.zeros((1080, 1920, 3), dtype=np.uint8))
+    video_thread.publish_preview(np.full((1080, 1920, 3), 255, dtype=np.uint8))
+    image = video_thread.take_preview()
+    assert (image.width(), image.height()) == (640, 360)
+    assert image.pixelColor(0, 0).red() == 255
+    assert video_thread.take_preview() is None
+
+
+def test_manual_commands_are_coalesced_and_sent_by_worker(video_thread):
+    video_thread.ser = Mock()
+    video_thread.request_manual_command("Left")
+    video_thread.request_manual_command("Right")
+    video_thread.ser.write.assert_not_called()
+    video_thread.send_pending_command()
+    video_thread.send_pending_command()
+    video_thread.ser.write.assert_called_once_with(b"Right\n")
+
+
+def test_file_inference_preserves_every_frame(video_thread, mocker):
+    cap = Mock()
+    cap.isOpened.return_value = True
+    cap.get.return_value = 30
+    frames = [np.full((20, 30, 3), value, dtype=np.uint8) for value in range(3)]
+    cap.read.side_effect = [(True, frame) for frame in frames] + [(False, None)]
+    mocker.patch("frontend.threads.video_threads.cv2.VideoCapture", return_value=cap)
+    mocker.patch(
+        "frontend.threads.video_threads.models_directory",
+        return_value=Mock(glob=Mock(return_value=[])),
+    )
+    detector = mocker.patch(
+        "frontend.video.get_ball_detection",
+        side_effect=lambda model, frame, *args, **kw: ([], frame),
+    )
+    video_thread.model = Mock()
+    video_thread.inference_active = True
+    video_thread.live = False
+    video_thread.run()
+    assert detector.call_count == 3
+    assert [int(call.args[1][0, 0, 0]) for call in detector.call_args_list] == [0, 1, 2]
+    assert all(call.kwargs["precision"] == "fp32" for call in detector.call_args_list)
+    cap.release.assert_called_once()
+
+
+def test_stopping_inference_does_not_stall_preview_until_rate_deadline(video_thread, mocker):
+    from dataclasses import replace
+
+    from backend.capture import CapturedFrame
+    from backend.detection import FrameTransform
+    from frontend.video import videorun
+
+    clock = [1.0]
+    mocker.patch("frontend.video.time.monotonic", side_effect=lambda: clock[0])
+    mocker.patch.object(
+        video_thread, "msleep", side_effect=lambda ms: clock.__setitem__(0, clock[0] + ms / 1000)
+    )
+    video_thread.runtime = replace(video_thread.runtime, inference_fps=0.1)
+    video_thread.model = Mock()
+    video_thread.inference_active = True
+    frame = np.zeros((20, 30, 3), dtype=np.uint8)
+    reader = Mock(live=False, ended=True, error=None, dropped=0)
+    reader.read.side_effect = [CapturedFrame(frame, 1), CapturedFrame(frame, 1), None]
+
+    def detect(*args, **kwargs):
+        video_thread.toggle_inference(False)
+        return [], frame
+
+    mocker.patch("frontend.video.get_ball_detection", side_effect=detect)
+    videorun(video_thread, reader, FrameTransform(), 30)
+    assert clock[0] < 1.1  # Preview resumes without waiting the ten-second cap.
