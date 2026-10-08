@@ -125,6 +125,18 @@ speed and camera FOV to the actor's saved calibration. Legacy raw actor weights
 need retraining, and legacy `P:` position firmware must be replaced; existing
 detector checkpoints remain supported.
 
+Check the complete actor-training-to-command path without a detector or motor:
+
+```bash
+camman-check-agent-pipeline --output artifacts/pipeline_check
+```
+
+This trains a synthetic test actor, reloads it and verifies velocity/Stop output
+through serial loopback. Read `verification.json` for the result; it does not
+qualify the model for real games or test physical hardware. See the
+[training guide](training/README.md#software-only-trial-without-a-detector-or-controller)
+for server GPU use and the full game-training workflow.
+
 ## Development
 
 ```bash

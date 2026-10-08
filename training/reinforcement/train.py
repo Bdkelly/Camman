@@ -14,7 +14,7 @@ from backend.models import load_model_from_path
 from backend.policy import atomic_save, export_actor
 from training.reinforcement import config
 from training.reinforcement.agent import RLAgent
-from training.reinforcement.environment import CameraControlEnv, SimulationSpec
+from training.reinforcement.environment import SIMULATOR_VERSION, CameraControlEnv, SimulationSpec
 from training.reinforcement.evaluate import baselines, evaluate_policy
 from training.reinforcement.reward import RewardSystem
 from training.reinforcement.tracks import TrackSequence, extract_tracks
@@ -118,8 +118,17 @@ def train_agent(
         torch.set_num_threads(cpu_threads)
     device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
     saved = torch.load(resume, map_location="cpu", weights_only=True) if resume else None
-    if saved and (saved.get("format") != "camman.ddpg-training" or saved.get("version") != 1):
+    if resume and (
+        not isinstance(saved, dict)
+        or saved.get("format") != "camman.ddpg-training"
+        or saved.get("version") != 1
+    ):
         raise ValueError("Resume requires a complete Camman training checkpoint")
+    if saved and saved.get("simulator_version", 1) != SIMULATOR_VERSION:
+        raise ValueError(
+            "Resume simulator version differs from this code. Start a new run; "
+            "old replay used different camera stopping behavior."
+        )
     if (not saved or Path(resume).resolve() != output / "training_latest.pth") and any(
         (output / name).exists()
         for name in ("training_latest.pth", "actor_episode_best.pth", "actor_episode_final.pth")
@@ -204,6 +213,7 @@ def train_agent(
     output.mkdir(parents=True, exist_ok=True)
     comparison = baselines(validation, spec, sim, max_steps=max_t, reward_weights=reward_weights)
     run = {
+        "simulator_version": SIMULATOR_VERSION,
         "control": asdict(spec),
         "simulation": asdict(sim),
         "options": asdict(opts),
@@ -270,6 +280,7 @@ def train_agent(
             if latest_validation["mean_reward"] > best_score:
                 best_score = latest_validation["mean_reward"]
                 metadata = {
+                    "simulator_version": SIMULATOR_VERSION,
                     "episode": episode,
                     "updates": agent.updates,
                     "validation": latest_validation,
@@ -321,6 +332,7 @@ def train_agent(
         output / "actor_episode_final.pth",
         spec,
         training={
+            "simulator_version": SIMULATOR_VERSION,
             "episode": num_episodes,
             "updates": agent.updates,
             "validation": latest_validation,

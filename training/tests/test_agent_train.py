@@ -151,3 +151,21 @@ def test_extraction_error_releases_video(mocker):
     with pytest.raises(RuntimeError, match="bad frames"):
         extract_tracks("game.mp4", mocker.Mock(), "cpu")
     cap.release.assert_called_once()
+
+
+def test_resume_rejects_replay_from_old_simulator(tmp_path, tracks):
+    output = tmp_path / "run"
+    small_run(tracks, output, episodes=2)
+    path = output / "training_latest.pth"
+    old = torch.load(path, weights_only=True)
+    old.pop("simulator_version")
+    torch.save(old, path)
+    with pytest.raises(ValueError, match="simulator version differs"):
+        train_agent(resume=path, num_episodes=4, device="cpu")
+
+
+def test_empty_resume_is_rejected_instead_of_starting_new_training(tmp_path, tracks):
+    path = tmp_path / "empty.pth"
+    torch.save({}, path)
+    with pytest.raises(ValueError, match="complete Camman training checkpoint"):
+        train_agent(resume=path, tracks_paths=[tracks], checkpoint_dir=tmp_path / "run")

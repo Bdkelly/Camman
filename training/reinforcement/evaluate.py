@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from backend.policy import ActorPolicy
-from training.reinforcement.environment import CameraControlEnv, SimulationSpec
+from training.reinforcement.environment import SIMULATOR_VERSION, CameraControlEnv, SimulationSpec
 from training.reinforcement.reward import RewardSystem
 from training.reinforcement.tracks import TrackSequence
 
@@ -90,6 +90,8 @@ def main(argv=None):
     reward_weights = policy.metadata["training"].get("reward_weights")
     sequences = [TrackSequence.load(path) for path in args.tracks]
     report = {
+        "evaluation_simulator_version": SIMULATOR_VERSION,
+        "training_simulator_version": policy.metadata["training"].get("simulator_version", 1),
         "actor": evaluate_policy(
             policy,
             sequences,

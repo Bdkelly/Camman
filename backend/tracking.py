@@ -9,7 +9,7 @@ from backend.hardware.serial_connection import send_agent_command
 
 
 class TrackingController:
-    def __init__(self, spec=None, *, invert_pan=False, proportional_gain=3.0):
+    def __init__(self, spec=None, *, invert_pan=False, proportional_gain=3.0, clock=None):
         self.spec = spec or ControlSpec()
         self.observations = ObservationBuilder(self.spec)
         self.invert_pan = invert_pan
@@ -19,6 +19,12 @@ class TrackingController:
         self.last_state = None
         self._manual_until = None
         self._last_write = None
+        self._clock = clock
+
+    def _now(self):
+        # An injected monotonic clock makes simulated deployment checks
+        # deterministic without changing the process-wide time functions.
+        return self._clock() if self._clock is not None else time.monotonic()
 
     def _send(self, action, ser, log, now, *, force=False):
         command = velocity_command(action, invert=self.invert_pan)
@@ -36,7 +42,7 @@ class TrackingController:
         return action
 
     def stop(self, ser, *, log=None, force=False, reset=False):
-        action = self._send(0.0, ser, log, time.monotonic(), force=force)
+        action = self._send(0.0, ser, log, self._now(), force=force)
         self._manual_until = None
         if reset:
             self.observations.reset()
@@ -45,7 +51,7 @@ class TrackingController:
 
     def tick(self, ser, *, enabled=True, log=None):
         """Call even when no video frame arrives, to expire motion requests."""
-        now = time.monotonic()
+        now = self._now()
         if self._manual_until is not None:
             if now < self._manual_until:
                 return
@@ -66,7 +72,7 @@ class TrackingController:
             return self.stop(ser, log=log, force=True, reset=True)
         if not 0 < duration <= 0.5:
             raise ValueError("Manual pulse duration must be 0..0.5 seconds")
-        now = time.monotonic()
+        now = self._now()
         action = -0.25 if command == "Left" else 0.25
         self._send(action, ser, log, now, force=True)
         self._manual_until = now + duration
@@ -75,7 +81,7 @@ class TrackingController:
     def update(
         self, boxes, ser, width, height, interval=None, *, agent=None, log=None, observed_at=None
     ):
-        now = time.monotonic()
+        now = self._now()
         observed_at = now if observed_at is None else observed_at
         interval = self.spec.period if interval is None else interval
         try:

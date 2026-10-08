@@ -386,8 +386,10 @@ viewport. Reward favors horizontal centering, keeping the ball visible and
 smooth/low-effort movement; it does not penalize vertical error that pan cannot
 correct. Motor response, randomization and dropout approximate deployment
 conditions, but do not replace measured latency, backlash, acceleration and
-travel-limit testing. The policy cannot recover a ball that remains outside
-view after the loss timeout; it stops until a usable detection returns.
+travel-limit testing. A zero command, including a deadband/loss stop, now
+cancels simulated velocity immediately, matching the firmware's `Stop` behavior.
+The policy cannot recover a ball that remains outside view after the loss
+timeout; it stops until a usable detection returns.
 
 Without `--validation-tracks`, each source is split into contiguous 80% training
 and 20% validation sections. This avoids exact frame reuse but correlated parts
@@ -424,10 +426,13 @@ baselines in the reports. A learned actor can underperform the simpler controlle
 camman-train-agent --resume artifacts/policy_v1/training_latest.pth --episodes 400 --device cuda:0 --output artifacts/policy_v1
 ```
 
-`--episodes 400` means 400 total episodes. Omitted settings, reward weights and cache paths are
-restored. Omit `--output` to reuse the checkpoint directory. Resume validates configuration and actual trajectory fingerprints;
-changing them requires a new run. Paths can be supplied again if caches moved
-but their content is identical. Save/resume occurs at episode boundaries, not
+`--episodes 400` means 400 total episodes. Omitted settings, reward weights and
+cache paths are restored. Omit `--output` to reuse the checkpoint directory. Resume validates
+configuration, simulator version and actual trajectory fingerprints; changing
+them requires a new run. Simulator version 2 fixes coasting after `Stop`.
+Checkpoints from version 1 (or without a simulator version) must start a new
+training run because their replay contains the old camera dynamics. Paths can
+be supplied again if caches moved but their content is identical. Save/resume occurs at episode boundaries, not
 mid-step. CPU resume is tested against uninterrupted training; identical GPU
 results also depend on the PyTorch/CUDA stack and deterministic kernels.
 
@@ -467,8 +472,37 @@ actors/controllers instead of guessing their scale.
 
 ### Software-only trial without a detector or controller
 
-This exercises real optimizer updates and export on synthetic trajectories. It
-is useful for checking installation; it does not produce a game-ready model.
+Run the complete installation/integration check with one command:
+
+```sh
+camman-check-agent-pipeline --output artifacts/pipeline_check
+```
+
+Use a **new output directory** each time. The command generates separate
+synthetic training/validation tracks, performs real actor/critic updates, reloads
+the best actor, repeats validation, and passes its decisions through the actual
+backend controller and pyserial's in-memory `loop://` transport. It verifies
+normalized nonzero velocity commands and Stop on target loss, disable and
+shutdown. `verification.json` records checks, model size, metrics, controller
+baselines and the exact serial messages. A passing check confirms software
+integration; inspect `beats_proportional_baseline` separately for the learned
+policy's synthetic performance.
+
+It opens **no physical serial port**, does not flash firmware, and does not test
+the MCU handshake, motor driver or real camera. Its actor is a test artifact,
+not a model trained on your games. The check defaults to 30 episodes, 100 steps
+per episode and CPU; use `--device cuda:0` to check training on your RTX server
+and CPU deployment of the exported actor. `--episodes` and `--steps` can adjust
+the trial. A run without optimizer updates or nonzero probe commands fails
+instead of reporting a successful camera-control check.
+
+Equivalent module invocation:
+
+```sh
+python -m training.reinforcement.verify --output artifacts/pipeline_check_module
+```
+
+To run the individual stages yourself:
 
 ```sh
 camman-cache-tracks --synthetic --max-frames 1800 --seed 0 --output data/tracks/demo_train.npz
@@ -496,6 +530,7 @@ name for each). The DDPG implementation follows the
 | [reinforcement/tracks.py](reinforcement/tracks.py) | One-pass video detection caches and synthetic trials |
 | [reinforcement/environment.py](reinforcement/environment.py) | Calibrated virtual viewport, visibility, shared state and motor response |
 | [reinforcement/evaluate.py](reinforcement/evaluate.py) | Deterministic validation and controller baselines |
+| [reinforcement/verify.py](reinforcement/verify.py) | Fresh training, actor reload, evaluation and serial loopback verification |
 | [tests/](tests/) | Data handling, training outputs, environment and agent checks |
 
 ## Troubleshooting and tests

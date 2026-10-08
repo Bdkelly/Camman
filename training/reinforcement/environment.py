@@ -8,6 +8,9 @@ import numpy as np
 from backend.control import ControlSpec, ObservationBuilder, guarded_pan
 from training.reinforcement.reward import RewardSystem
 
+# Version 2 matches CAMMAN/1 Stop: cancel motion rather than coast through zero.
+SIMULATOR_VERSION = 2
+
 
 @dataclass(frozen=True)
 class SimulationSpec:
@@ -117,7 +120,11 @@ class CameraControlEnv:
         next_index = min(self.index + stride, len(self.sequence.centers) - 1)
         dt = (next_index - self.index) / self.sequence.fps
         tau = self.simulation.motor_response_s
-        if tau:
+        if executed == 0:
+            # The deployed firmware calls stopMotion() for Stop/V:0, including
+            # commands zeroed by the deadband or lost-target guard.
+            self.velocity = integrated_velocity = 0.0
+        elif tau:
             decay = math.exp(-dt / tau)
             integrated_velocity = executed * dt + (self.velocity - executed) * tau * (1 - decay)
             self.velocity = executed + (self.velocity - executed) * decay

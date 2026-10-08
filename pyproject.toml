@@ -31,6 +31,7 @@ camman-train = "training.detection.train:main"
 camman-train-agent = "training.reinforcement.train:main"
 camman-cache-tracks = "training.reinforcement.tracks:main"
 camman-evaluate-agent = "training.reinforcement.evaluate:main"
+camman-check-agent-pipeline = "training.reinforcement.verify:main"
 camman-clean = "training.data.clean:main"
 camman-annotate = "training.data.auto_annotate:main"
 

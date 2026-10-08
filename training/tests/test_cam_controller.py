@@ -78,3 +78,21 @@ def test_observation_latency_missing_and_timing_validation():
         builder.observe((0.5, 0.5), 0, 10.3)
     with pytest.raises(ValueError):
         builder.observe(None, 0, 10.5, action_dt=float("nan"))
+
+
+@pytest.mark.parametrize("reason", ["zero", "deadband", "lost"])
+def test_stop_cancels_velocity_without_coasting_like_firmware(reason):
+    env = CameraControlEnv(
+        [sequence()], simulation=SimulationSpec(motor_response_s=0.5), training=False
+    )
+    env.reset()
+    env.step([1])
+    assert env.velocity > 0
+    before = env.camera_center
+    if reason == "lost":
+        env.observations.target_age = env.spec.lost_target_timeout_s
+    action = {"zero": 0, "deadband": 0.001, "lost": 1}[reason]
+    state, _, _, _, info = env.step([action])
+    assert info["executed_action"] == 0
+    assert state[2] == 0 and env.velocity == 0
+    assert env.camera_center == before
