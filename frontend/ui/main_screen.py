@@ -70,13 +70,14 @@ class MainWindow(QMainWindow):
         self.settings_group = QGroupBox("Tracking Settings")
 
         self.interval_slider = QSlider(Qt.Horizontal)
-        self.interval_slider.setRange(1, 20)
+        self.interval_slider.setRange(1, 100)
         self.interval_slider.setValue(10)
 
-        self.interval_label = QLabel(f"Command Interval: {self.interval_slider.value() / 10.0}s")
+        self.interval_label = QLabel(f"Command Interval: {self.interval_slider.value() / 100.0}s")
 
         self.manual_left_button = QPushButton("Manual Left")
         self.manual_right_button = QPushButton("Manual Right")
+        self.manual_stop_button = QPushButton("Stop Motion")
         self.performance_label = QLabel("Video starting…")
         self.performance_label.setWordWrap(True)
 
@@ -104,6 +105,7 @@ class MainWindow(QMainWindow):
         manual_h_layout = QHBoxLayout()
         manual_h_layout.addWidget(self.manual_left_button)
         manual_h_layout.addWidget(self.manual_right_button)
+        manual_h_layout.addWidget(self.manual_stop_button)
         settings_layout.addLayout(manual_h_layout)
 
         right_v_layout.addWidget(self.settings_group)
@@ -124,6 +126,8 @@ class MainWindow(QMainWindow):
         self.manual_right_button.clicked.connect(
             lambda: self.thread.request_manual_command("Right")
         )
+        self.manual_stop_button.clicked.connect(self.stop_motion)
+        self.thread.control_interval_signal.connect(self.set_policy_interval)
 
         self.inference_toggle_signal.connect(self.thread.toggle_inference)
         self.agent_toggle_signal.connect(self.thread.toggle_agent)
@@ -183,10 +187,23 @@ class MainWindow(QMainWindow):
             self.agent_toggle_signal.emit(False)
 
     def update_interval_ui(self, value):
-        self.interval_label.setText(f"Command Interval: {value / 10.0:.1f}s")
+        self.interval_label.setText(f"Command Interval: {value / 100.0:.2f}s")
 
     def update_interval_thread(self, value):
-        self.command_interval_update_signal.emit(value / 10.0)
+        self.command_interval_update_signal.emit(value / 100.0)
+
+    @pyqtSlot(float)
+    def set_policy_interval(self, interval):
+        self.interval_slider.blockSignals(True)
+        self.interval_slider.setValue(round(interval * 100))
+        self.interval_slider.blockSignals(False)
+        self.interval_slider.setEnabled(False)
+        self.interval_label.setText(f"Policy command interval: {interval:.3f}s")
+
+    def stop_motion(self):
+        self.agent_control_button.setChecked(False)
+        self.toggle_agent(False)
+        self.thread.request_manual_command("Stop")
 
     def closeEvent(self, event):
         self.preview_timer.stop()

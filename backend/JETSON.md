@@ -3,8 +3,9 @@
 [Project](../README.md) · [Frontend](../frontend/README.md) · [Backend](README.md)
 
 Training stays on your RTX server. Copy the detector `.pth` and optional
-camera-control actor `.pth` to the Jetson. No export or retraining is needed
-to try this profile. The app remains PyQt5, with video inside its window.
+versioned camera-control actor `.pth` to the Jetson. Detector checkpoints do
+not need retraining for this profile. Legacy bare actor weights must be
+retrained with the new observation/velocity contract. The app remains PyQt5, with video inside its window.
 
 These changes have CPU/headless regression coverage. **Jetson FPS, CUDA FP16
 accuracy, camera pipelines and motor behavior still need testing on your kit.**
@@ -115,6 +116,30 @@ camman --profile jetson --device cuda --source data/game_01/game.mp4 \
 Files keep every frame and play more slowly if inference cannot keep up.
 Live inputs drain capture continuously, retaining only the newest waiting
 frame. Override classification with `--source-mode live` or `file`.
+
+## Headless policy deployment
+
+To operate without Qt, use the same backend through `camman-track`:
+
+```bash
+camman-track --profile jetson --device cuda --source 0 --capture-backend v4l2 \
+  --model artifacts/detector_v1/trained_model_final.pth \
+  --actor artifacts/policy_v1/actor_episode_best.pth
+```
+
+This starts immediately in dry-run mode. After validating the
+[controller firmware/calibration](firmware/controller/README.md), add
+`--serial-port /dev/ttyUSB0`. Use `--invert-pan` only if the measured wiring
+reverses the intended camera direction. The actor runs on CPU and uses its
+saved decision frequency, FOV, speed and timeout contract. Train using the
+measured deployment cadence and latency; an actor cannot compensate for an
+arbitrarily slow detector. Critic/replay/checkpoint state stays on the server.
+
+The serial handshake requires CAMMAN/1 velocity support. Frame freshness and
+lost-target checks stop stale motion; shutdown and failures attempt Stop. The
+ESP32 firmware has its own 750 ms watchdog because a blocked Python inference
+call cannot send immediate commands. No physical Jetson/motor validation is
+claimed by the software tests.
 
 ## Hardware video input
 

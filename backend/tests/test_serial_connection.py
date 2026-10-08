@@ -13,9 +13,10 @@ from backend.hardware.serial_connection import (
 from backend.hardware.serial_validation import valid_serial
 
 
-@pytest.mark.parametrize("command,wire", [(move_left, b"Left\n"), (move_right, b"Right\n")])
+@pytest.mark.parametrize("command,wire", [(move_left, b"V:-0.2500\n"), (move_right, b"V:0.2500\n")])
 def test_manual_commands_are_framed(command, wire):
     connection, log = Mock(), Mock()
+    connection.write.side_effect = len
     command(connection, log)
     connection.write.assert_called_once_with(wire)
     log.assert_called_once_with(wire.decode().strip())
@@ -30,8 +31,9 @@ def test_no_serial_is_optional():
 
 def test_agent_command_has_one_newline():
     connection = Mock()
-    send_agent_command(connection, "P:0.5,T:0.00\n")
-    connection.write.assert_called_once_with(b"P:0.5,T:0.00\n")
+    connection.write.side_effect = len
+    send_agent_command(connection, "V:0.5000\n")
+    connection.write.assert_called_once_with(b"V:0.5000\n")
 
 
 @pytest.mark.parametrize("valid", [True, False])
@@ -65,3 +67,28 @@ def test_unavailable_port_does_not_abort_scan(mocker):
         side_effect=serial.SerialException("busy"),
     )
     assert valid_serial(Mock(device="COM3")) is False
+
+
+def test_partial_write_and_multiple_lines_rejected():
+    with pytest.raises(serial.SerialTimeoutException):
+        send_agent_command(Mock(write=Mock(return_value=1)), "V:0.2500")
+    connection = Mock()
+    with pytest.raises(ValueError):
+        send_agent_command(connection, "V:0.25\nV:1")
+    connection.write.assert_not_called()
+
+
+def test_controller_handshake_requires_explicit_velocity_support(mocker):
+    from backend.hardware.serial_connection import verify_velocity_controller
+
+    connection = Mock(write=Mock(side_effect=len))
+    connection.readline.side_effect = [b"Stopping\n", b"CAMMAN/1 VELOCITY\n"]
+    verify_velocity_controller(connection)
+    assert connection.write.call_args_list[0].args[0] == b"Stop\n"
+    clock = mocker.patch(
+        "backend.hardware.serial_connection.time.monotonic", side_effect=[0, 0.1, 4]
+    )
+    connection.readline.side_effect = [b"legacy firmware\n"]
+    with pytest.raises(RuntimeError, match="CAMMAN/1"):
+        verify_velocity_controller(connection)
+    assert clock.call_count == 3

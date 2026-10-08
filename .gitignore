@@ -13,6 +13,7 @@ dist/
 htmlcov/
 .pytest_cache/
 .ruff_cache/
+.pio/
 # Local datasets, trained models and outputs
 /data/
 /models/

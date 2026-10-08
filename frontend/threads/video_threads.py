@@ -7,7 +7,7 @@ from PyQt5.QtGui import QImage
 from backend.capture import FrameReader, is_live_source, open_capture
 from backend.config import models_directory
 from backend.detection import FrameTransform
-from backend.hardware.serial_connection import open_connection, send_agent_command
+from backend.hardware.serial_connection import open_connection, verify_velocity_controller
 from backend.models import load_model_from_path
 from backend.policy import ActorPolicy
 from backend.runtime import resolve_runtime
@@ -18,6 +18,7 @@ from frontend.video import videorun
 class VideoThread(QThread):
     command_log_signal = pyqtSignal(str)
     stats_signal = pyqtSignal(str)
+    control_interval_signal = pyqtSignal(float)
 
     def __init__(
         self,
@@ -34,6 +35,7 @@ class VideoThread(QThread):
         capture_width=None,
         capture_height=None,
         capture_fps=None,
+        invert_pan=False,
     ):
         super().__init__(parent)
         self._run_flag = True
@@ -42,7 +44,9 @@ class VideoThread(QThread):
         self.mutex = QMutex()
         self.agent = None
         self.ser = None
-        self.command_interval = 1.0
+        self.command_interval = 0.1
+        self.tracking_available = True
+        self.invert_pan = invert_pan
         self.model = None
         self.video_source = video_source
         self.actor_path = actor_path
@@ -55,7 +59,7 @@ class VideoThread(QThread):
         self._pending_model_path = model_path
         self._pending_command = None
         self._preview = None
-        self.controller = TrackingController()
+        self.controller = TrackingController(invert_pan=invert_pan)
 
     def run(self):
         cap = None
@@ -95,18 +99,42 @@ class VideoThread(QThread):
                     # GPU round trip before its result is sent over serial.
                     actor_device = "cpu" if self.runtime.profile == "jetson" else self.device
                     self.agent = ActorPolicy(self.actor_path, actor_device)
+                    self.controller = TrackingController(
+                        self.agent.spec, invert_pan=self.invert_pan
+                    )
+                    self.command_interval = self.agent.spec.period
+                    self.control_interval_signal.emit(self.command_interval)
+                    self.command_log_signal.emit(
+                        f"Actor ready: normalized pan velocity; {self.agent.spec.control_hz:g} Hz; "
+                        f"calibration {self.agent.spec.max_pan_speed_deg_s:g} degrees/s, "
+                        f"horizontal FOV {self.agent.spec.camera_hfov_deg:g} degrees"
+                    )
                 except Exception as exc:
-                    self.command_log_signal.emit(f"Actor unavailable: {exc}. Using basic tracking.")
+                    self.tracking_available = False
+                    self.command_log_signal.emit(f"Actor unavailable; tracking disabled: {exc}")
             try:
                 self.ser = open_connection(self.serial_port)
+                if self.serial_port and self.ser is None:
+                    raise RuntimeError("No controller found for the requested serial port")
+                verify_velocity_controller(self.ser)
             except Exception as exc:
-                self.command_log_signal.emit(f"Serial connection unavailable: {exc}")
+                self.tracking_available = False
+                self.command_log_signal.emit(f"Controller unavailable; motion disabled: {exc}")
+                if self.ser is not None:
+                    self.ser.close()
+                    self.ser = None
             reader = FrameReader(cap, live=self.live).start()
             videorun(self, reader, FrameTransform(), fps)
         except Exception as exc:
             self.command_log_signal.emit(f"Video stopped: {exc}")
         finally:
             self._run_flag = False
+            try:
+                self.controller.stop(
+                    self.ser, log=self.command_log_signal.emit, force=self.ser is not None
+                )
+            except Exception as exc:
+                self.command_log_signal.emit(f"Final Stop could not be sent: {exc}")
             if reader is not None:
                 if not reader.close():
                     self.command_log_signal.emit(
@@ -153,6 +181,11 @@ class VideoThread(QThread):
 
     @pyqtSlot(bool)
     def toggle_agent(self, state):
+        if state and not self.tracking_available:
+            self.command_log_signal.emit(
+                "Tracking unavailable: fix the actor/controller startup error."
+            )
+            return
         with QMutexLocker(self.mutex):
             self.agent_active = state
         self.command_log_signal.emit(f"--- CamMan Agent {'STARTED' if state else 'STOPPED'} ---")
@@ -176,7 +209,8 @@ class VideoThread(QThread):
             command, self._pending_command = self._pending_command, None
         if command is not None:
             try:
-                send_agent_command(self.ser, command, self.command_log_signal.emit)
+                if self.tracking_available:
+                    self.controller.manual(command, self.ser, log=self.command_log_signal.emit)
             except Exception as exc:
                 self.command_log_signal.emit(f"Manual command failed: {exc}")
 

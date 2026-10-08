@@ -9,7 +9,7 @@ the same detector and actor definitions.
 | Directory | Responsibility | Entry point |
 | --- | --- | --- |
 | [frontend/](frontend/README.md) | PyQt windows, video presentation, UI signals and worker adapter | `camman` or `python -m frontend` |
-| [backend/](backend/README.md) | Detector inference, actor inference, tracking control, serial/Bluetooth, firmware | Imported by the frontend; diagnostics in `backend.tools` |
+| [backend/](backend/README.md) | Detector/actor inference, tracking lifecycle, serial protocol and ESP32 firmware | `camman-track`, frontend imports, diagnostics in `backend.tools` |
 | [training/](training/README.md) | Detector training, reinforcement learning, annotation review, data cleaning and video tools | `camman-train`, `camman-train-agent`, `camman-clean`, `camman-annotate` |
 
 The frontend and training tools depend on the backend. The backend does not
@@ -75,7 +75,7 @@ camman --profile jetson --device cuda --source 0 --model /path/to/detector.pth
 pipeline with `--capture-backend gstreamer`. `--device cpu` or `--device
 cuda:0` overrides automatic device selection. The app starts in video preview;
 use **Start Inference** and **Start CamMan Agent** when ready. Without an actor,
-tracking uses left/right/stop rules. Hardware is optional: pass an explicit port
+tracking uses proportional pan velocity. Hardware is optional: pass an explicit port
 or `--serial-port auto` to connect. Port probing sends `Stop`, not a pan command.
 
 The Models window stores detector weights in `~/.camman/models` (on Windows,
@@ -96,15 +96,34 @@ outside the source packages, for example under the ignored `data/` and
 python -m training.data.video extract /path/to/game.mp4 data/game/frames
 camman-clean --annotations data/game/labels.json --images data/game/frames --output data/game/clean.json
 camman-train --annotations data/game/clean.json --images data/game/frames --output artifacts/detection --epochs 42
-camman-train-agent --video /path/to/game.mp4 --model artifacts/detection/trained_model_final.pth --output artifacts/reinforcement
+camman-cache-tracks --video /path/to/game.mp4 --model artifacts/detection/trained_model_final.pth --output data/tracks/game.npz
+camman-train-agent --tracks data/tracks/game.npz --output artifacts/reinforcement
 ```
 
 Detector training supports `--batch-size`, `--workers`, `--device` and
 `--no-pretrained`. The default initializes from COCO weights and may download
 them; loading an existing checkpoint for inference never requests those weights.
-Agent training supports `--episodes` and `--steps` and saves best/final actors
-and critics. Follow the [training walkthrough](training/README.md) for labeling,
+Agent training uses cached trajectories, a shared calibrated velocity contract,
+held-out validation against basic controllers and full resumable checkpoints.
+It saves a deployable actor only after actual optimizer updates. Follow the [training walkthrough](training/README.md) for labeling,
 cleaning, training, reviewing results and using the saved weights in the app.
+
+## Camera-control deployment
+
+Use the [actor–critic walkthrough](training/README.md#optional-train-the-camera-control-policy)
+to cache footage, train, resume, evaluate and deploy. `camman-track` runs the
+full tracking pipeline without Qt; omit `--serial-port` for a dry-run.
+
+```bash
+camman-track --source 0 --model artifacts/detection/trained_model_final.pth --actor artifacts/reinforcement/actor_episode_best.pth
+```
+
+The [supported ESP32 firmware](backend/firmware/controller/README.md) implements
+CAMMAN/1 normalized velocity, handshake, watchdog and software travel limits.
+Other microcontrollers can implement the same protocol. Match measured motor
+speed and camera FOV to the actor's saved calibration. Legacy raw actor weights
+need retraining, and legacy `P:` position firmware must be replaced; existing
+detector checkpoints remain supported.
 
 ## Development
 
@@ -116,8 +135,9 @@ python -m build
 
 For headless Linux tests, set `QT_QPA_PLATFORM=offscreen`. Set
 `NO_ALBUMENTATIONS_UPDATE=1` to disable the augmentation library's startup version
-check. Tests use synthetic images and mocked video/serial devices; they do not
-download trained weights or operate hardware.
+check. Tests include real CPU actor/critic learning, deterministic resume, serial
+loopback and a native firmware parser check when `g++` is available. Video and
+physical devices are mocked; tests do not download weights or operate hardware.
 
 ## Migration from the old layout
 

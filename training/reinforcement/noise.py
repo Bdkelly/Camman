@@ -8,7 +8,7 @@ class OUNoise:
         self.mu = mu * np.ones(size)
         self.theta = theta
         self.sigma = sigma
-        self.seed = np.random.seed(seed)
+        self.rng = np.random.default_rng(seed)
         self.size = size
         self.reset()
 
@@ -17,6 +17,6 @@ class OUNoise:
 
     def sample(self):
         x = self.state
-        dx = self.theta * (self.mu - x) + self.sigma * np.random.standard_normal(self.size)
+        dx = self.theta * (self.mu - x) + self.sigma * self.rng.standard_normal(self.size)
         self.state = x + dx
         return self.state

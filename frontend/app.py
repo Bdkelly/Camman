@@ -15,6 +15,9 @@ def main(argv=None):
     parser.add_argument("--actor", help="Optional camera-control actor .pth checkpoint")
     parser.add_argument("--serial-port", help="ESP32 port, e.g. COM3, /dev/ttyUSB0, or auto")
     parser.add_argument(
+        "--invert-pan", action="store_true", help="Reverse motor direction on the wire"
+    )
+    parser.add_argument(
         "--preview-fps", type=float, help="Preview ceiling (Jetson: 15; standard: 30)"
     )
     parser.add_argument("--inference-fps", type=float, help="Inference ceiling; 0 is unlimited")
@@ -50,6 +53,7 @@ def main(argv=None):
         capture_width=args.capture_width,
         capture_height=args.capture_height,
         capture_fps=args.capture_fps,
+        invert_pan=args.invert_pan,
     )
     window.show()
     return app.exec_()

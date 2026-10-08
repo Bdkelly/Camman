@@ -18,11 +18,13 @@ def test_initialization(video_thread):
     assert video_thread._run_flag
     assert not video_thread.inference_active
     assert not video_thread.agent_active
-    assert video_thread.command_interval == 1.0
+    assert video_thread.command_interval == 0.1
 
 
 def test_video_eof_releases_capture_and_serial(video_thread, mocker):
     cap, serial = Mock(), Mock()
+    serial.write.side_effect = len
+    mocker.patch("frontend.threads.video_threads.verify_velocity_controller")
     cap.isOpened.return_value = True
     cap.get.return_value = 30
     cap.read.side_effect = [(True, np.zeros((20, 30, 3), dtype=np.uint8)), (False, None)]
@@ -55,6 +57,8 @@ def test_camera_failure_releases_capture(video_thread, mocker):
 
 def test_inference_exception_closes_resources(video_thread, mocker):
     cap, serial = Mock(), Mock()
+    serial.write.side_effect = len
+    mocker.patch("frontend.threads.video_threads.verify_velocity_controller")
     cap.isOpened.return_value = True
     cap.get.return_value = 30
     cap.read.return_value = (False, None)
@@ -129,13 +133,13 @@ def test_preview_mailbox_retains_only_newest_image(video_thread):
 
 
 def test_manual_commands_are_coalesced_and_sent_by_worker(video_thread):
-    video_thread.ser = Mock()
+    video_thread.ser = Mock(write=Mock(side_effect=len))
     video_thread.request_manual_command("Left")
     video_thread.request_manual_command("Right")
     video_thread.ser.write.assert_not_called()
     video_thread.send_pending_command()
     video_thread.send_pending_command()
-    video_thread.ser.write.assert_called_once_with(b"Right\n")
+    video_thread.ser.write.assert_called_once_with(b"V:0.2500\n")
 
 
 def test_file_inference_preserves_every_frame(video_thread, mocker):
@@ -189,3 +193,52 @@ def test_stopping_inference_does_not_stall_preview_until_rate_deadline(video_thr
     mocker.patch("frontend.video.get_ball_detection", side_effect=detect)
     videorun(video_thread, reader, FrameTransform(), 30)
     assert clock[0] < 1.1  # Preview resumes without waiting the ten-second cap.
+
+
+def test_incompatible_controller_disables_motion(video_thread, mocker):
+    cap = Mock()
+    cap.isOpened.return_value = True
+    cap.get.return_value = 30
+    cap.read.return_value = (False, None)
+    connection = Mock(write=Mock(side_effect=len))
+    mocker.patch("frontend.threads.video_threads.open_capture", return_value=cap)
+    mocker.patch("frontend.threads.video_threads.open_connection", return_value=connection)
+    mocker.patch(
+        "frontend.threads.video_threads.verify_velocity_controller",
+        side_effect=RuntimeError("wrong protocol"),
+    )
+    mocker.patch(
+        "frontend.threads.video_threads.models_directory",
+        return_value=Mock(glob=Mock(return_value=[])),
+    )
+    video_thread.run()
+    assert not video_thread.tracking_available
+    video_thread.toggle_agent(True)
+    assert not video_thread.agent_active
+    connection.close.assert_called_once()
+
+
+def test_disabling_tracking_during_detection_sends_stop(video_thread, mocker):
+    from backend.capture import CapturedFrame
+    from backend.detection import FrameTransform
+    from frontend.video import videorun
+
+    mocker.patch("frontend.video.time.monotonic", return_value=10)
+    video_thread.inference_active = video_thread.agent_active = True
+    video_thread.model = Mock()
+    video_thread.ser = Mock(write=Mock(side_effect=len))
+    video_thread.controller.prev_action = 0.5
+    video_thread.controller.observations.last_seen = 10
+    frame = np.zeros((20, 30, 3), dtype=np.uint8)
+    reader = Mock(live=True, ended=True, error=None)
+    reader.read.side_effect = [CapturedFrame(frame, 10), None]
+    video_thread.runtime = __import__("dataclasses").replace(video_thread.runtime, inference_fps=0)
+
+    def detect(*args, **kwargs):
+        video_thread.toggle_agent(False)
+        video_thread._run_flag = False
+        return [{"box": (20, 5, 28, 15)}], frame
+
+    mocker.patch("frontend.video.get_ball_detection", side_effect=detect)
+    videorun(video_thread, reader, FrameTransform(), 30)
+    video_thread.ser.write.assert_called_once_with(b"Stop\n")

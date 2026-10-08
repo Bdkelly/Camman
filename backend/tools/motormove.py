@@ -1,82 +1,50 @@
-import sys
+"""Send a bounded manual velocity pulse to a CAMMAN/1 controller."""
+
+import argparse
+import math
 import time
 
-import serial
-
-
-class MotorController:
-    def __init__(self, port, baud_rate=115200):
-        try:
-            self.ser = serial.Serial(port, baud_rate, timeout=1)
-            # Allow time for the ESP32 to reset after serial connection is established
-            print(f"Connecting to {port}...")
-            time.sleep(2)
-            print("Connected.")
-        except serial.SerialException as e:
-            print(f"Error connecting to serial port: {e}")
-            sys.exit(1)
-
-    def send_command(self, command_str):
-        """
-        Sends a command string to the ESP32.
-        Appends the newline character as required by Serial.readStringUntil('\n').
-        """
-        if self.ser.is_open:
-            # Ensure command ends with newline
-            full_command = f"{command_str}\n"
-            self.ser.write(full_command.encode("utf-8"))
-            # Optional: Read response if you want to verify (e.g., "Stopping")
-            # response = self.ser.readline().decode().strip()
-            # if response: print(f"ESP32: {response}")
-        else:
-            print("Serial port not open.")
-
-    def move_pan(self, value):
-        """
-        Sends the 'P:' command.
-        NOTE: Your firmware requires a comma to parse the float!
-        Structure: P:<value>,
-        """
-        # We append ',0' to ensure the comma exists for the firmware parser
-        cmd = f"P:{value},0"
-        print(f"Sending Move: {cmd}")
-        self.send_command(cmd)
-
-    def move_right(self):
-        print("Sending: Right")
-        self.send_command("Right")
-
-    def move_left(self):
-        print("Sending: Left")
-        self.send_command("Left")
-
-    def stop(self):
-        print("Sending: Stop")
-        self.send_command("Stop")
-
-    def close(self):
-        if self.ser.is_open:
-            self.ser.close()
-            print("Serial connection closed.")
+from backend.hardware.protocol import velocity_command
+from backend.hardware.serial_connection import (
+    open_connection,
+    send_agent_command,
+    verify_velocity_controller,
+)
 
 
 def main(argv=None):
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Send one ESP32 motor command")
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", required=True)
     command = parser.add_mutually_exclusive_group(required=True)
-    command.add_argument("--pan", type=float)
+    command.add_argument("--pan", type=float, help="Normalized velocity in [-1, 1]")
     command.add_argument("--command", choices=["Left", "Right", "Stop"])
+    parser.add_argument("--duration", type=float, default=0.2, help="Pulse seconds, maximum 0.5")
+    parser.add_argument("--invert-pan", action="store_true")
     args = parser.parse_args(argv)
-    motor = MotorController(args.port)
+    if not 0 < args.duration <= 0.5:
+        parser.error("Duration must be 0..0.5 seconds")
+    action = (
+        args.pan
+        if args.pan is not None
+        else {"Left": -0.25, "Right": 0.25, "Stop": 0}[args.command]
+    )
+    if not math.isfinite(action) or not -1 <= action <= 1:
+        parser.error("Pan must be a finite value in [-1, 1]")
+    connection = None
     try:
-        if args.pan is not None:
-            motor.move_pan(args.pan)
-        else:
-            motor.send_command(args.command)
+        connection = open_connection(args.port)
+        if connection is None:
+            raise RuntimeError("No controller found")
+        verify_velocity_controller(connection)
+        send_agent_command(connection, velocity_command(action, invert=args.invert_pan), print)
+        if action:
+            time.sleep(args.duration)
     finally:
-        motor.close()
+        if connection is not None:
+            try:
+                send_agent_command(connection, "Stop", print)
+            finally:
+                connection.close()
 
 
 if __name__ == "__main__":

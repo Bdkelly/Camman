@@ -1,28 +1,22 @@
-import numpy as np
+import pytest
 
 from training.reinforcement.reward import RewardSystem
 
 
-def test_reward_calculation():
-    reward_system = RewardSystem(
-        reward_weights={"centering": 100.0, "effort": 1.0, "stability": 20.0}
-    )
-
-    reward = reward_system.calculate_reward(dx=0, dy=0, pan_action=0)
-    assert np.isclose(reward, 600.0)
-
-    reward = reward_system.calculate_reward(dx=0.1, dy=0.1, pan_action=0.5)
-    expected_centering = 500.0 * np.exp(-10.0 * (0.1**2 + 0.1**2))
-    expected_effort = -1.0 * 0.5
-    expected_stability = -20.0 * 0.5
-    expected_window = 100.0
-
-    expected_reward = expected_centering + expected_effort + expected_stability + expected_window
-    assert np.isclose(reward, expected_reward)
+def test_pan_only_reward_prefers_center_and_ignores_vertical_error():
+    rewards = RewardSystem()
+    centered = rewards.calculate_reward(0, 0, 0)
+    assert centered == pytest.approx(1.25)
+    assert rewards.calculate_reward(0, 0.4, 0) == centered
+    assert rewards.calculate_reward(0.4, 0, 0) < centered
+    assert rewards.calculate_reward(0, 0, 0, False) < 0
 
 
-def test_reward_reset():
-    reward_system = RewardSystem(reward_weights={})
-    reward_system.update_prev_action(0.5)
-    reward_system.reset()
-    assert reward_system.prev_action[0] == 0.0
+def test_effort_and_action_change_penalized_and_reset():
+    rewards = RewardSystem()
+    moving = rewards.calculate_reward(0, 0, 0.5)
+    assert moving < rewards.calculate_reward(0, 0, 0)
+    rewards.update_prev_action(0.5)
+    assert rewards.calculate_reward(0, 0, 0.5) > moving
+    rewards.reset()
+    assert rewards.prev_action == 0

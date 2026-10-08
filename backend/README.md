@@ -8,7 +8,8 @@ and actor definitions, checkpoint loading, tracking rules and hardware transport
 
 It is an **in-process library**, not a web service. There is no backend server,
 HTTP port or `python -m backend` launcher to start. Run the frontend to use it
-interactively, import it in a Python program, or run the diagnostics below.
+interactively, run `camman-track` without a GUI, import it in a Python program,
+or run the diagnostics below.
 
 ## How it connects to the other components
 
@@ -16,7 +17,7 @@ interactively, import it in a Python program, or run the diagnostics below.
 | --- | --- | --- |
 | [Frontend](../frontend/README.md) | Loading detector/actor weights, detecting balls and sending control commands | Boxes, annotated frames, actions and log callbacks |
 | [Detector training](../training/detection/train.py) | Constructing the same detector architecture the application loads | A trainable PyTorch model |
-| [Camera-policy training](../training/reinforcement/train.py) | Detector inference and the shared actor architecture | Ball positions and compatible actor weights |
+| [Camera-policy training](../training/reinforcement/train.py) | Shared observations, calibrated actions and actor architecture | Versioned deployable actor; detector runs once when caching tracks |
 | [Annotation tools](../training/data/auto_annotate.py) | Running a trained detector over images | Candidate bounding boxes |
 
 The backend does not import the frontend, Qt, Albumentations or the training
@@ -66,9 +67,7 @@ from backend.detection import FrameTransform, get_ball_detection
 from backend.models import load_model_from_path
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = load_model_from_path(
-    "artifacts/detector_v1/trained_model_final.pth", device
-)
+model = load_model_from_path("artifacts/detector_v1/trained_model_final.pth", device)
 transform = FrameTransform()
 frame = cv2.imread("data/game_01/frames/frame_00000.jpg")
 if frame is None:
@@ -166,64 +165,95 @@ and the remaining hardware validation.
 
 ## Tracking and actor inference
 
-`TrackingController.update(boxes, ser, width, height, interval, agent=None,
-log=None)` owns the last command time and previous action. Reuse one controller
-across frames so command throttling and action history work.
+Run the complete capture → detection → policy → controller pipeline without Qt:
 
-With an actor, it constructs a four-element state:
+```sh
+camman-track --source 0 --model artifacts/detector_v1/trained_model_final.pth --actor artifacts/policy_v1/actor_episode_best.pth --profile jetson --device cuda
+```
 
-| State value | Meaning |
+Omitting `--serial-port` is a **dry-run**: decisions are computed and logged, but
+no port is opened. Add `--serial-port /dev/ttyUSB0` (or `COM3` on Windows) to drive
+a configured controller. Headless tracking starts immediately; Ctrl+C, EOF,
+inference failures and frame limits send `Stop` before closing. `--frames 300`
+limits a trial. It supports the GUI's capture, device and precision options,
+`--inference-fps`, `--confidence` and `--invert-pan`.
+`python -m backend.tools.track` is equivalent.
+
+`TrackingController` is reusable by the GUI, headless runner or a future TUI.
+Create it with `TrackingController(policy.spec)`, call `update` with each frame's
+boxes and capture timestamp (`observed_at`), and call `tick` regularly even when
+frames stop arriving. Call `stop(..., force=True)` in your shutdown path. A custom
+sink can provide a pyserial-compatible `write(bytes)` returning the byte count.
+
+[control.py](control.py) defines the seven-value observation used by **both**
+the simulator and live application:
+
+| Field | Meaning |
 | --- | --- |
-| `dx` | Ball horizontal offset from frame center, divided by frame width |
-| `dy` | Ball vertical offset from frame center, divided by frame height |
-| `previous_action` | Last actor pan command |
-| `is_detected` | `1.0` when a box is present, otherwise `0.0` |
+| `dx`, `dy` | Target offset from image center in fractions of width/height; zero when missing |
+| `previous_pan` | Last executed normalized pan request, before wiring inversion |
+| `detected` | Target present in the current usable frame |
+| `image_velocity_x` | Horizontal image motion in frame widths/s, clipped to ±5; reset across gaps |
+| `dt_ratio` | Elapsed decision time divided by the policy's configured period, clipped to 0–10 |
+| `target_age_ratio` | Time since the last observed target divided by the loss timeout, clipped to 0–2 |
 
-When no ball is detected, `dx` and `dy` are zero and the detection flag is zero;
-the actor can still choose a command. Without an actor, the controller uses the
-first box and a 50-pixel horizontal dead zone: left, right, or stop when centered.
-Basic tracking sends no new command when there is no box. With no serial
-connection, the controller sends nothing. `interval` limits automatic command
-frequency; it does not change inference FPS.
+The actor outputs **one pan velocity in [-1, 1]**; +1 means right at the saved
+maximum degrees/s. It does not output a position or control tilt. Its versioned
+checkpoint stores field order, action semantics, architecture, horizontal FOV,
+maximum speed, decision frequency, deadband and freshness/loss timeouts. The GUI
+uses the saved frequency and locks its interval slider for an actor. Inference
+can run slower than that rate; the observation reports elapsed time, but slow
+hardware still needs a policy trained/evaluated for its measured cadence.
 
-Application actor inference defaults to a pan scale of `1.0`; the training
-simulation uses `5.0`. The state dictionary does not store this setting. See the
-[training deployment notes](../training/README.md#optional-train-the-camera-control-policy)
-and calibrate the policy/firmware combination before motor use.
+Without an actor, the controller uses proportional pan (`3 × dx`, bounded to
+[-1, 1]) and stops immediately on missing detections. With an actor, short gaps
+can be predicted through, but missing/stale observations trigger a forced stop
+at the configured loss timeout (default 0.5 s). Frames older than the freshness
+limit (default 0.5 s) do not refresh target visibility. Frame age starts when
+OpenCV returns a frame; camera/decoder buffering is additional latency.
+
+Invalid actor output stops motion. Disabling tracking/inference stops it on the
+next worker iteration, and the firmware watchdog covers a blocked/crashed host.
+Manual left/right are bounded 200 ms velocity pulses. The GUI's **Stop Motion**
+button disables automatic control and queues `Stop`; it is not a hardware stop
+switch. Large inference calls can delay host commands, so firmware-side timeout
+and limits remain necessary.
+
+Legacy raw actor weights are rejected: their old four-value state and pan scale
+cannot be safely inferred. [Retrain using the new pipeline](../training/README.md#optional-train-the-camera-control-policy).
+Detector weights keep their existing compatibility.
 
 ## Hardware connections
 
-`open_connection("COM3")` opens a known port at 115200 baud. Linux ports may
-look like `/dev/ttyUSB0`; use the actual port assigned to your device.
-`open_connection("auto")` probes ports for a `Stopping` response to `Stop`.
-`open_connection(None)` returns `None` for operation without a platform.
+Use the [supported firmware and calibration guide](firmware/controller/README.md).
+`open_connection("COM3")` uses 115200 baud and bounded read/write timeouts.
+`open_connection("auto")` probes for a `Stopping` reply; an explicitly requested
+controller must then pass `verify_velocity_controller`. The frontend disables
+motion on failed handshakes, while headless startup reports an error. Omitting
+a port leaves the application in dry-run mode.
 
-The transport appends one newline to each command:
-
-| Action | Serial command before the newline |
+| Message, before newline | Meaning |
 | --- | --- |
-| Manual/basic left | `Left` |
-| Manual/basic right | `Right` |
-| Basic tracking centered | `Stop` |
-| Actor pan | `P:<value>,T:0.00` |
+| `HELLO` → `CAMMAN/1 VELOCITY` | Required version/capability handshake |
+| `V:0.2500` | +25% normalized pan velocity |
+| `V:-0.2500` | −25% normalized pan velocity |
+| `Stop` → `Stopping` | Stop motion |
 
-The caller owns the connection and must close it. The frontend's worker does
-this on exit. To run diagnostics explicitly:
+Serial writes are checked for complete delivery. The host refreshes active
+velocity during `tick`; the firmware stops after 750 ms without a valid velocity
+command. Calibration is a separate physical measurement: the handshake cannot
+verify motor wiring, speed, gearing or camera FOV. Other microcontrollers can
+implement the same newline protocol and lifecycle.
 
 ```sh
 python -m backend.tools.probe
 python -m backend.tools.motormove --port COM3 --command Stop
+python -m backend.tools.motormove --port COM3 --pan 0.25 --duration 0.2
 ```
 
-The probe opens serial ports and sends `Stop`. The motor tool also accepts
-`--command Left`, `--command Right`, or `--pan 0.5`; those commands move real
-hardware. Consult the [firmware README](firmware/README.md) for the retained
-sketch variants and their known limitations.
-
-Bluetooth code currently provides discovery/connection helpers with placeholder
-UUIDs. The application control loop uses serial; a Bluetooth status indicator
-does not make motor control use Bluetooth. BLE firmware and UUID integration
-remain unfinished.
+The last command moves real hardware briefly and always attempts `Stop` before
+closing. Bluetooth discovery helpers remain experimental; the tracking loop
+uses serial. No BLE motor-control integration is implied by a status indicator.
 
 ## Code map and tests
 
@@ -232,12 +262,13 @@ remain unfinished.
 | [models.py](models.py) | Shared detector factory and checkpoint loading |
 | [detection.py](detection.py) | Preprocessing, prediction filtering, coordinate scaling and overlays |
 | [actor.py](actor.py), [policy.py](policy.py) | Shared actor architecture and inference-only wrapper |
-| [tracking.py](tracking.py) | Rate-limited control and four-value actor state |
+| [tracking.py](tracking.py) | Rate-limited policy execution, freshness checks, manual pulses and stop lifecycle |
+| [control.py](control.py) | Shared observation/action contract and camera calibration |
 | [config.py](config.py) | Writable detector directory and `CAMMAN_MODELS_DIR` override |
 | [runtime.py](runtime.py), [capture.py](capture.py) | Deployment profiles and bounded camera/file capture |
 | [hardware/](hardware/) | Serial commands, port probing and Bluetooth helpers |
-| [tools/](tools/) | Device/platform diagnostics and detector benchmarking |
-| [firmware/](firmware/) | Preserved ESP32 source variants |
+| [tools/](tools/) | Headless tracking, diagnostics and detector benchmarking |
+| [firmware/](firmware/) | Supported velocity firmware plus legacy reference variants |
 | [tests/](tests/) | Model, transport, tracking and component-boundary checks |
 
 For tests, use the full development environment: the training extras support
@@ -251,5 +282,6 @@ python -m pytest backend/tests
 If CUDA is unavailable, verify the active environment and PyTorch installation.
 For model key/shape errors, check that the file is a detector rather than an
 actor/critic and matches this architecture. If port probing misses a board after
-reset, pass its known port explicitly. These tests use mocked serial devices;
-firmware compilation and physical platform behavior require separate testing.
+reset, pass its known port explicitly. Tests include serial loopback and the firmware parser (with `g++` installed).
+Build the ESP32 project separately with PlatformIO; physical platform behavior
+still requires validation on your rig.

@@ -26,8 +26,11 @@ dev = ["pytest>=8,<10", "pytest-qt>=4.4,<5", "pytest-mock>=3.12,<4", "pytest-cov
 [project.scripts]
 camman = "frontend.app:main"
 camman-benchmark = "backend.tools.benchmark:main"
+camman-track = "backend.tools.track:main"
 camman-train = "training.detection.train:main"
 camman-train-agent = "training.reinforcement.train:main"
+camman-cache-tracks = "training.reinforcement.tracks:main"
+camman-evaluate-agent = "training.reinforcement.evaluate:main"
 camman-clean = "training.data.clean:main"
 camman-annotate = "training.data.auto_annotate:main"
 
@@ -41,7 +44,7 @@ exclude = ["*.tests", "*.tests.*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-backend = ["firmware/*.cpp", "firmware/README.md", "JETSON.md"]
+backend = ["firmware/*.cpp", "firmware/README.md", "firmware/controller/platformio.ini", "firmware/controller/include/*.h", "firmware/controller/src/*.cpp", "firmware/controller/README.md", "JETSON.md"]
 
 [tool.ruff]
 target-version = "py310"

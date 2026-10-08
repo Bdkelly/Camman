@@ -79,7 +79,7 @@ Quote paths that contain spaces.
 3. Click **Start Inference** to show detected ball boxes.
 4. To control a platform, launch with `--serial-port` and click **Start CamMan
    Agent** while inference is active. Without an actor model, this uses basic
-   left/right/stop rules.
+   proportional pan-velocity control.
 
 To run with a trained camera-control actor on Windows:
 
@@ -91,14 +91,22 @@ On Linux, substitute the actual serial port, such as `/dev/ttyUSB0`.
 See the [backend hardware section](../backend/README.md#hardware-connections)
 for protocol and firmware details.
 
+New actors require the **CAMMAN/1 VELOCITY** controller firmware. Legacy raw
+actor weights need retraining; detector checkpoints remain compatible. An actor
+or controller startup error disables motion and is shown in the log. Missing
+or stale targets stop motion after the saved timeout. Disabling inference or
+tracking and closing the feed also request Stop. Host commands run between
+inference calls; the controller watchdog stops a stalled host independently.
+
 ## Startup options
 
 | Option | Meaning | Default |
 | --- | --- | --- |
 | `--source` | Camera index, video path, URL or GStreamer pipeline | Camera `0` |
 | `--model` | Ball-detector checkpoint | First alphabetically sorted `.pth` in the model directory, if present |
-| `--actor` | Optional camera-control actor checkpoint | Basic tracking rules |
-| `--serial-port` | Explicit port, or `auto` to probe | No platform connection |
+| `--actor` | Versioned camera-control actor checkpoint | Proportional pan control |
+| `--serial-port` | Explicit port, or `auto` to probe | Dry-run, no platform connection |
+| `--invert-pan` | Reverse wired motor direction | Off |
 | `--device` | PyTorch device, such as `cpu` or `cuda:0` | CUDA if available, otherwise CPU |
 | `--profile` | `auto`, `standard`, or `jetson` runtime settings | Detect Jetson from its device tree |
 | `--precision` | `auto`, `fp32`, or CUDA `fp16` autocast | FP16 on Jetson CUDA; FP32 elsewhere |
@@ -132,8 +140,9 @@ every frame. The performance readout is not a model accuracy measurement.
 | --- | --- |
 | **Start/Stop Inference** | Enables/disables ball detection; preview continues |
 | **Start/Stop CamMan Agent** | Enables/disables automatic control while inference runs |
-| **Manual Left / Manual Right** | Requests a serial command, sent between worker inference calls; rapid clicks retain the newest request |
-| **Command Interval** | Sets the minimum interval between automatic commands: 0.1–2.0 seconds, initially 1.0 |
+| **Manual Left / Manual Right** | Requests a 200 ms velocity pulse, sent between inference calls; rapid clicks retain the newest request |
+| **Stop Motion** | Disables automatic control and requests Stop at the next worker iteration |
+| **Command Interval** | Basic control: 0.01–1.0 s, initially 0.1 s; a loaded actor locks it to its saved decision period |
 | **Models** | Copies detector weights into the model directory and requests a model load |
 | **Platform** | Scans wired/Bluetooth availability; it does not replace the active serial connection |
 

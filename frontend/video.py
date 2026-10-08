@@ -19,9 +19,12 @@ def videorun(thread, reader, transform, fps):
         thread.send_pending_command()
         with QMutexLocker(thread.mutex):
             inference = thread.inference_active and thread.model is not None
-            tracking = thread.agent_active
+            tracking = thread.agent_active and thread.tracking_available
             model = thread.model
             interval = thread.command_interval
+        thread.controller.tick(
+            thread.ser, enabled=bool(inference and tracking), log=thread.command_log_signal.emit
+        )
         if inference != previous_inference:
             # Toggling inference must not inherit a long deadline from a low
             # inference FPS cap; preview/control changes take effect immediately.
@@ -48,6 +51,14 @@ def videorun(thread, reader, transform, fps):
             )
             inference_ms = (time.monotonic() - started) * 1000
             inferred += 1
+            # A user can disable motion while the detector is running.
+            with QMutexLocker(thread.mutex):
+                tracking = (
+                    thread.inference_active and thread.agent_active and thread.tracking_available
+                )
+            thread.controller.tick(
+                thread.ser, enabled=bool(tracking), log=thread.command_log_signal.emit
+            )
             if tracking:
                 height, width = frame.shape[:2]
                 thread.controller.update(
@@ -58,6 +69,7 @@ def videorun(thread, reader, transform, fps):
                     interval,
                     agent=thread.agent,
                     log=thread.command_log_signal.emit,
+                    observed_at=packet.captured_at,
                 )
         now = time.monotonic()
         if now >= next_preview:

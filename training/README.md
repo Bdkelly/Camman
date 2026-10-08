@@ -12,10 +12,10 @@ There are **two different training jobs**:
 | Model | Learns to | Required inputs | Used by the application as |
 | --- | --- | --- | --- |
 | Ball detector | Find the ball's bounding box in an image | Original images and reviewed box labels | `--model detector.pth` |
-| Optional camera-control actor | Choose a pan action from ball position and action history | A trained detector and a game video | `--actor actor.pth` |
+| Optional camera-control actor | Choose normalized pan velocity from ball position, motion and history | Cached trajectories from reviewed fixed-camera footage | `--actor actor.pth` |
 
 Train the **detector first**. The application can detect balls and use basic
-left/right/stop tracking without an actor. Actor training does not improve the
+proportional pan tracking without an actor. Actor training does not improve the
 ball detector; it learns a separate camera-control policy.
 
 ## How the parts connect
@@ -305,50 +305,182 @@ contain old paths; they are not a complete ready-to-train dataset.
 
 ## Optional: train the camera-control policy
 
-A policy consumes the detector's ball location and learns a pan action using a
-simulated horizontal viewing window over a recorded game. It needs a **trained
-detector plus a readable video**, and runs without a physical ESP32 or a GUI.
-It does not train or replace the detector.
+The actor–critic pipeline trains **pan control**, separately from ball detection.
+Training runs on your RTX server (or CPU); deployment loads only the small actor
+on the Jetson and sends normalized velocity commands to the microcontroller.
+No camera controller is opened during training.
+
+The workflow is: **cache trajectories → train DDPG → evaluate on other games →
+dry-run → calibrate and deploy**. The detector is run once per source video,
+not inside every reinforcement-learning episode.
+
+### 1. Cache representative trajectories
+
+Use fixed, wide-view footage where the ball can move within a virtual camera
+viewport. A video from an already panning camera confounds ball and camera
+motion; stabilize it or use fixed-camera recordings before building this cache.
+Choose different games for training, validation and final testing. Include fast
+plays, edge-of-view targets, false detections, occlusions and lighting changes.
 
 ```sh
-camman-train-agent --video data/game_01/game.mp4 --model artifacts/detector_v1/trained_model_final.pth --episodes 200 --steps 5000 --device cuda:0 --output artifacts/policy_v1
+camman-cache-tracks --video data/game_01/game.mp4 --model artifacts/detector_v1/trained_model_final.pth --device cuda:0 --confidence 0.98 --output data/tracks/game_01.npz
+camman-cache-tracks --video data/game_02/game.mp4 --model artifacts/detector_v1/trained_model_final.pth --device cuda:0 --confidence 0.98 --output data/tracks/game_02.npz
 ```
 
-| Option | Meaning | Code default |
+Set `--fps 30` if the video has missing/incorrect FPS metadata; use its actual
+rate. `--max-frames` limits extraction for a trial. Runtime options such as
+`--detector-size 640 --precision fp16` allow caching with the intended deployment
+settings. Verify small-ball detection quality when changing these settings.
+
+A cache is a compact, versioned NumPy archive containing normalized `[x, y]`
+centers, a per-frame detection mask, FPS and source metadata. No video images or
+pickle objects are required by the RL loop. Failed/missing detections are
+masked, not silently converted into a centered ball. Detector-generated
+trajectories are **not ground truth**: review representative frames and correct
+bad tracks before using evaluation numbers to select a real deployment.
+For manually reviewed trajectories, construct and save a `TrackSequence` from
+`training.reinforcement.tracks` with the same normalized coordinates and mask.
+
+### 2. Train with matching camera calibration
+
+```sh
+camman-train-agent --tracks data/tracks/game_01.npz --validation-tracks data/tracks/game_02.npz --episodes 200 --steps 1000 --device cuda:0 --control-hz 10 --camera-hfov-deg 90 --max-pan-speed-deg-s 30 --view-fraction 0.5 --output artifacts/policy_v1
+```
+
+Both `--tracks` and `--validation-tracks` accept multiple files. The example FOV
+and speed are placeholders: measure your camera's horizontal FOV and maximum
+pan speed, and set the firmware to the same speed. `--view-fraction` is the
+fraction of the full source frame visible through the virtual camera. This is
+a simplified local image-motion model, not an exact camera/lens calibration.
+Tilt is manually fixed; this actor controls one pan axis.
+
+| Option | Default | Purpose |
 | --- | --- | --- |
-| `--video` | Game video used by the simulation | Required |
-| `--model` | Trained detector checkpoint | Required |
-| `--episodes` | Number of simulated runs through the video | `200` |
-| `--steps` | Maximum steps per episode; video EOF can end it earlier | `5000` |
-| `--output` | Actor and critic checkpoint directory | `artifacts/reinforcement` |
-| `--device` | PyTorch device | CUDA if available, otherwise CPU |
+| `--episodes` | 200 | Total target episode count, also when resuming |
+| `--steps` | 5000 | Maximum decision steps per episode; EOF also truncates |
+| `--batch-size`, `--memory-size` | 128 / 50000 | Optimization batch and bounded CPU replay capacity |
+| `--warmup-steps` | 1000 | Initial random-action collection; optimization also requires a full batch |
+| `--lr-actor`, `--lr-critic` | 0.0001 / 0.001 | Separate learning rates |
+| `--gamma`, `--tau`, `--grad-clip` | 0.99 / 0.005 / 1 | Discount, target interpolation and gradient bound |
+| `--noise-sigma`, `--noise-decay`, `--noise-min` | 0.2 / 0.995 / 0.02 | Gaussian exploration; decay each episode |
+| `--eval-every`, `--checkpoint-every` | 10 / 10 | Validation and full resumable checkpoint intervals |
+| `--control-hz` | 10 | Intended policy decisions/s; also saved for deployment |
+| `--camera-hfov-deg`, `--max-pan-speed-deg-s` | 90 / 30 | Shared physical action calibration |
+| `--lost-target-timeout-s`, `--max-frame-age-s` | 0.5 / 0.5 | Target-loss and frame-freshness limits |
+| `--deadband` | 0.02 | Ignore tiny normalized commands |
+| `--view-fraction`, `--motor-response-s` | 0.5 / 0.08 | Virtual crop width and approximate motor response |
+| `--dropout`, `--randomization` | 0.05 / 0.2 | Training-only sensor dropout, motor-gain variation and timing jitter |
+| `--seed` | 0 | Training initialization and sampling seed |
+| `--cpu-threads` | Torch default | Useful for the small network, including CPU trials |
 
-`python -m training.reinforcement.train` accepts the same arguments.
-An episode resets to the start of the video. The agent uses DDPG: an **actor**
-chooses actions and a **critic** estimates their value during training.
-[reinforcement/config.py](reinforcement/config.py) holds learning rates, replay
-buffer size, action/state dimensions, exploration settings and reward parameters;
-[reinforcement/reward.py](reinforcement/reward.py) defines the reward formula.
-Progress includes each episode's score and a running average over up to 100
-episodes.
+DDPG uses a seven-value observation shared with the backend, bounded velocity
+actions, a numeric replay ring, detached target-network estimates, gradient
+clipping and soft target updates. The actor is optimized through the critic's
+action input while critic parameters are frozen. Truncations retain Bellman
+bootstrapping. The replay stores the command actually executed after the
+shared loss/deadband guard. See the [observation contract](../backend/README.md#tracking-and-actor-inference).
 
-The output includes `actor_episode_best.pth` and `critic_episode_best.pth` when
-the running average improves, numbered pairs every 100 episodes, and
-`actor_episode_final.pth` / `critic_episode_final.pth` at completion. These are
-network state dictionaries, not full resumable training sessions.
+Episodes start at randomized observable positions and camera offsets. Camera
+motion changes the viewport, and the actor cannot see the target outside that
+viewport. Reward favors horizontal centering, keeping the ball visible and
+smooth/low-effort movement; it does not penalize vertical error that pan cannot
+correct. Motor response, randomization and dropout approximate deployment
+conditions, but do not replace measured latency, backlash, acceleration and
+travel-limit testing. The policy cannot recover a ball that remains outside
+view after the loss timeout; it stops until a usable detection returns.
 
-Deploy the **actor** alongside the detector, for example on a Windows app host:
+Without `--validation-tracks`, each source is split into contiguous 80% training
+and 20% validation sections. This avoids exact frame reuse but correlated parts
+of the same game can still overstate generalization; separate games are better.
+Exact duplicate train/validation caches are rejected. Validation uses three
+initial offsets without exploration noise or synthetic dropout. Each rollout
+starts at the first usable frame and runs up to `--steps`; split long recordings
+into representative clips or raise that limit to evaluate more of each game.
+Model selection uses mean held-out reward, not training score.
+
+The older `--video ... --model ...` invocation remains a convenience: it caches
+the video once under the run directory, then follows this same training path.
+For several runs, cache explicitly to reuse detections.
+
+### 3. Inspect outputs and resume
+
+| Artifact | Contents / use |
+| --- | --- |
+| `actor_episode_best.pth` | Best validation actor, schema, calibration, validation metrics and provenance; deploy this after evaluation |
+| `actor_episode_final.pth` | Last actor; it may be worse than the best actor |
+| `critic_episode_best.pth`, `critic_episode_final.pth` | Critic weights for analysis; never sent to the application |
+| `training_latest.pth` | Full actor/critic/target weights, optimizers, replay, RNGs, progress, configuration and data fingerprints |
+| `run.json` | Settings, source metadata, split description and baseline results |
+| `metrics.jsonl` | Episode rewards, loss values, update counts and periodic validation |
+| `summary.json` | Best score and whether it exceeds the proportional-control baseline |
+
+A run with no optimizer updates fails clearly and exports **no deployable
+actor**, while leaving its full checkpoint available for continuation. An actor
+is not labeled successful merely because training completed. Compare visibility,
+centering, mean error and action changes against the stationary and proportional
+baselines in the reports. A learned actor can underperform the simpler controller.
+
+```sh
+camman-train-agent --resume artifacts/policy_v1/training_latest.pth --episodes 400 --device cuda:0 --output artifacts/policy_v1
+```
+
+`--episodes 400` means 400 total episodes. Omitted settings, reward weights and cache paths are
+restored. Omit `--output` to reuse the checkpoint directory. Resume validates configuration and actual trajectory fingerprints;
+changing them requires a new run. Paths can be supplied again if caches moved
+but their content is identical. Save/resume occurs at episode boundaries, not
+mid-step. CPU resume is tested against uninterrupted training; identical GPU
+results also depend on the PyTorch/CUDA stack and deterministic kernels.
+
+### 4. Evaluate, then deploy the actor
+
+Cache a third, untouched game using step 1, then evaluate it:
+
+```sh
+camman-evaluate-agent --actor artifacts/policy_v1/actor_episode_best.pth --tracks data/tracks/game_03.npz --steps 5000 --output artifacts/policy_v1/test-game.json
+camman-track --source data/game_03/game.mp4 --model artifacts/detector_v1/trained_model_final.pth --actor artifacts/policy_v1/actor_episode_best.pth --frames 300
+```
+
+Evaluation runs the closed-loop virtual-camera simulation. The headless dry-run
+checks live processing/command production but cannot prove physical closed-loop
+performance: a recorded view does not respond to the commands. Inspect footage,
+latency and false target switches as well as numeric scores before motor tests.
+
+Configure/build the [CAMMAN/1 velocity firmware](../backend/firmware/controller/README.md),
+check direction and measured calibration with a short manual pulse, then deploy:
 
 ```sh
 camman --source 0 --model artifacts/detector_v1/trained_model_final.pth --actor artifacts/policy_v1/actor_episode_best.pth --serial-port COM3
 ```
 
-The application loads only the actor, and automatic control requires both
-inference and CamMan Agent to be enabled. Keep critic files on the training
-side. Training uses `MAX_ACTION=5.0` in its simulated window, while application
-actor inference defaults to `max_action=1.0` for pan commands. Weights do not
-encode that scale, and the simulation is not a model of the physical motor.
-Calibrate the policy and selected firmware together before deployment.
+Enable both **Start Inference** and **Start CamMan Agent**. On a headless Jetson,
+use `camman-track --profile jetson --device cuda` with the same model/actor flags
+and `--serial-port /dev/ttyUSB0`; it starts tracking immediately. `--invert-pan`
+handles reversed motor wiring. Only the actor and detector are needed there.
+The default actor has approximately 36,000 parameters; the detector remains the
+main compute cost.
+
+**Migration:** old bare actor weights are incompatible with the new seven-value
+state and velocity semantics and must be retrained. Old `P:` position firmware
+must be replaced by CAMMAN/1-compatible velocity firmware. Detector weights
+retain their existing compatibility. The application rejects incompatible
+actors/controllers instead of guessing their scale.
+
+### Software-only trial without a detector or controller
+
+This exercises real optimizer updates and export on synthetic trajectories. It
+is useful for checking installation; it does not produce a game-ready model.
+
+```sh
+camman-cache-tracks --synthetic --max-frames 1800 --seed 0 --output data/tracks/demo_train.npz
+camman-cache-tracks --synthetic --max-frames 900 --seed 91 --output data/tracks/demo_validation.npz
+camman-train-agent --tracks data/tracks/demo_train.npz --validation-tracks data/tracks/demo_validation.npz --episodes 30 --steps 100 --batch-size 32 --memory-size 5000 --warmup-steps 128 --eval-every 5 --checkpoint-every 5 --device cpu --cpu-threads 1 --output artifacts/policy_demo
+camman-evaluate-agent --actor artifacts/policy_demo/actor_episode_best.pth --tracks data/tracks/demo_validation.npz --steps 100
+```
+
+All installed commands have module equivalents: `python -m
+training.reinforcement.tracks`, `.train`, and `.evaluate` (use the complete module
+name for each). The DDPG implementation follows the
+[algorithm and target-update equations](https://spinningup.openai.com/en/latest/algorithms/ddpg.html).
 
 ## Code map
 
@@ -361,7 +493,9 @@ Calibrate the policy and selected firmware together before deployment.
 | [data/video.py](data/video.py) | Frame extraction and video assembly |
 | [data/combine.py](data/combine.py), [data/metadata.py](data/metadata.py) | Annotation list and source-metadata utilities |
 | [reinforcement/train.py](reinforcement/train.py), [reinforcement/agent.py](reinforcement/agent.py) | Policy-training CLI and DDPG learning |
-| [reinforcement/environment.py](reinforcement/environment.py) | Video simulation, state updates and detector calls |
+| [reinforcement/tracks.py](reinforcement/tracks.py) | One-pass video detection caches and synthetic trials |
+| [reinforcement/environment.py](reinforcement/environment.py) | Calibrated virtual viewport, visibility, shared state and motor response |
+| [reinforcement/evaluate.py](reinforcement/evaluate.py) | Deterministic validation and controller baselines |
 | [tests/](tests/) | Data handling, training outputs, environment and agent checks |
 
 ## Troubleshooting and tests
@@ -386,7 +520,7 @@ python -m pip install -e ".[frontend,training,dev]"
 python -m pytest training/tests
 ```
 
-Tests use synthetic data and mocked detector/video dependencies where needed.
-They check code behavior and checkpoint compatibility, not real-game model
-accuracy. No full training run, GPU benchmark or Pi deployment is implied by a
-passing test suite.
+Tests include real CPU actor/critic updates, deterministic resume, held-out
+selection, actor deployment and simulated control. Detector/video dependencies
+are mocked where needed. This verifies code and checkpoint compatibility, not
+real-game accuracy, GPU performance or physical motor behavior.
