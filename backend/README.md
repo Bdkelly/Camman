@@ -6,10 +6,12 @@ The backend provides the Python code that turns a video frame into a ball
 detection and, optionally, a camera-pan command. It contains the shared detector
 and actor definitions, checkpoint loading, tracking rules and hardware transport.
 
-It is an **in-process library**, not a web service. There is no backend server,
-HTTP port or `python -m backend` launcher to start. Run the frontend to use it
-interactively, run `camman-track` without a GUI, import it in a Python program,
-or run the diagnostics below.
+The core is an **in-process library**. An optional authenticated HTTP control
+service now exposes it through `camman-web`, with a shared responsive phone and
+touchscreen interface. See the [web guide](../frontend/web/README.md) for startup,
+API routes and control ownership. You can also run the PyQt frontend, run
+`camman-track` without a GUI, or import the library in Python. There is no
+`python -m backend` launcher.
 
 ## How it connects to the other components
 
@@ -267,6 +269,7 @@ uses serial. No BLE motor-control integration is implied by a status indicator.
 | [config.py](config.py) | Writable detector directory and `CAMMAN_MODELS_DIR` override |
 | [runtime.py](runtime.py), [capture.py](capture.py) | Deployment profiles and bounded camera/file capture |
 | [hardware/](hardware/) | Serial commands, port probing and Bluetooth helpers |
+| [web/](web/) | Authenticated API, single-owner camera service and independent control deadlines |
 | [tools/](tools/) | Headless tracking, diagnostics and detector benchmarking |
 | [firmware/](firmware/) | Supported velocity firmware plus legacy reference variants |
 | [tests/](tests/) | Model, transport, tracking and component-boundary checks |
@@ -275,7 +278,7 @@ For tests, use the full development environment: the training extras support
 the preprocessing comparison, and Qt is required by the shared test plugin:
 
 ```sh
-python -m pip install -e ".[frontend,training,dev]"
+python -m pip install -e ".[frontend,web,training,dev]"
 python -m pytest backend/tests
 ```
 

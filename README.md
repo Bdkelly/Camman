@@ -8,8 +8,8 @@ the same detector and actor definitions.
 
 | Directory | Responsibility | Entry point |
 | --- | --- | --- |
-| [frontend/](frontend/README.md) | PyQt windows, video presentation, UI signals and worker adapter | `camman` or `python -m frontend` |
-| [backend/](backend/README.md) | Detector/actor inference, tracking lifecycle, serial protocol and ESP32 firmware | `camman-track`, frontend imports, diagnostics in `backend.tools` |
+| [frontend/](frontend/README.md) | PyQt desktop and responsive phone/touchscreen web UI | `camman`, `camman-web` |
+| [backend/](backend/README.md) | Detector/actor inference, tracking lifecycle, serial protocol and ESP32 firmware | `camman-track`, web control API, frontend imports, diagnostics in `backend.tools` |
 | [training/](training/README.md) | Detector training, reinforcement learning, annotation review, data cleaning and video tools | `camman-train`, `camman-train-agent`, `camman-clean`, `camman-annotate` |
 
 The frontend and training tools depend on the backend. The backend does not
@@ -56,10 +56,18 @@ source .venv/bin/activate
 python -m pip install -e ".[frontend]"
 ```
 
-Install `.[training]` on the training server, or `.[frontend,training,dev]` for
+Install `.[training]` on the training server, or `.[frontend,web,training,dev]` for
 development. `pip install -e .` installs backend dependencies without Qt or
 training augmentation dependencies. OpenCV is the headless build: Qt displays
 the application video, and RL training runs without a display.
+
+## Phone or touchscreen interface
+
+Install `.[web]` and run `camman-web --source 0 --host 0.0.0.0`. Open
+`http://JETSON_LAN_IP:8080` on a phone on the same private network and enter the
+server’s pairing key. Preview starts without motion; take control before tracking.
+See the [web guide](frontend/web/README.md) for models, serial control, Jetson
+installation, connection handling and API details. PyQt remains available below.
 
 ## Run the application
 
@@ -140,7 +148,7 @@ for server GPU use and the full game-training workflow.
 ## Development
 
 ```bash
-python -m pip install -e ".[frontend,training,dev]"
+python -m pip install -e ".[frontend,web,training,dev]"
 python -m pytest
 python -m build
 ```

@@ -2,11 +2,13 @@
 
 [Project overview](../README.md) · [Backend guide](../backend/README.md) · [Training guide](../training/README.md)
 
-The frontend is Camman's **PyQt5 desktop application**. It displays a camera or
+The frontend includes a **PyQt5 desktop application** and a
+[responsive web interface](web/README.md) for phones and touchscreens.
+This page describes the desktop application. It displays a camera or
 recorded game, lets the user choose a detector, and provides tracking controls
 and connection status. Video appears inside the application window.
 
-The frontend calls the backend as a Python library in the same process. It does
+The desktop frontend calls the backend as a Python library in the same process. It does
 not start a separate backend server or run model training. Training produces the
 `.pth` files that the application loads. A TUI/mpv interface is not implemented
 in this version.
@@ -199,7 +201,7 @@ training algorithms and dataset preparation in `training/`.
 Install development dependencies and run the frontend checks from the root:
 
 ```sh
-python -m pip install -e ".[frontend,training,dev]"
+python -m pip install -e ".[frontend,web,training,dev]"
 python -m pytest frontend/tests
 ```
 
