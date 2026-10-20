@@ -82,6 +82,9 @@ requires `ffmpeg` on PATH (`ffmpeg -version` should work). The optional manual
 review tool needs a graphical desktop and Python's Tk support, which can be
 checked with `python -m tkinter`.
 
+For the exact image/JSON layout, annotation examples and game-level
+train/validation/test separation, read [DATASET.md](DATASET.md).
+
 ## 2. Prepare the images
 
 For this walkthrough, put a game at `data/game_01/game.mp4`. Use your own paths
@@ -164,8 +167,9 @@ incorrect human labels.
 
 The training command also invokes this cleaner, so it can accept the supported
 raw formats directly. Saving `clean.json` first makes it easier to inspect
-exactly what will be used. Every record supplied to the trainer is used for
-training; there is no automatic train/validation split.
+exactly what will be used. Every record in `--annotations` is used for training. Supply a separate
+`--validation-annotations` manifest for held-out evaluation. There is no automatic
+split; keep entire games/sessions separate as described in [DATASET.md](DATASET.md).
 
 ## 5. Run a small detector training trial
 
@@ -190,12 +194,11 @@ random weights; it does not resume a previous detector.
 Once the trial works, start a separate run:
 
 ```sh
-camman-train --annotations data/game_01/clean.json --images data/game_01/frames --epochs 42 --batch-size 2 --workers 4 --device cuda:0 --output artifacts/detector_v1
+camman-train --annotations data/ball/train.clean.json --images data/ball/images --validation-annotations data/ball/validation.clean.json --epochs 42 --batch-size 4 --workers 4 --precision auto --device cuda:0 --cache-dir artifacts/image_cache --output artifacts/detector_v1
 ```
 
-The example starts with a batch size of two. Adjust it for the memory available
-on your server. Use a new output directory for each experiment: rerunning into
-the same directory can replace previous checkpoints.
+The example uses the split dataset in [DATASET.md](DATASET.md) and starts with a batch size of four. Adjust it for the memory available
+on your server. Use a new output directory for each experiment: a nonempty output directory is rejected to protect previous checkpoints.
 
 | Option | Meaning | Code default |
 | --- | --- | --- |
@@ -207,6 +210,15 @@ the same directory can replace previous checkpoints.
 | `--device` | `cuda:0`, `cpu`, or another PyTorch device | CUDA if available, otherwise CPU |
 | `--output` | Checkpoint/output directory | `artifacts/detection` |
 | `--no-pretrained` | Start without COCO initialization | Off |
+| `--precision` | `auto` enables CUDA FP16 autocast/scaling; `fp32` disables AMP | `auto` (CPU remains FP32) |
+| `--prefetch` | Waiting batches per worker; ignored with workers=0 | `2` |
+| `--cache-dir` | Optional local SSD cache of resized RGB pixels | Disabled |
+| `--detector-size` | Actual Faster R-CNN backbone input size | `800` |
+| `--validation-annotations` | Separate held-out labels; no training augmentation | Optional |
+| `--validation-images` | Validation image root | Same as `--images` |
+| `--eval-every` | Evaluate every N epochs and always on the final epoch | `1` |
+| `--confidence`, `--iou` | Fixed validation matching thresholds | `0.5`, `0.5` |
+| `--seed` | Initialization, shuffling and augmentation seeds | `0` |
 
 `python -m training.detection.train` accepts the same arguments as `camman-train`.
 Use `camman-train --help` to inspect the installed command.
@@ -218,12 +230,50 @@ The optimizer is Adam at an initial learning rate of `0.0001`, with five warmup
 epochs followed by a step scheduler. These settings live in
 [detection/train.py](detection/train.py); they are not additional CLI options.
 
-Progress is printed as epoch number, average **training loss** and learning
-rate. The script does not compute validation precision/recall or mAP, select a
-best detector by validation score, or provide a `--resume` option. Lower training
-loss alone does not demonstrate better performance on another game. Keep games
-outside the training set for later evaluation; that evaluation is currently a
-separate task rather than a built-in command.
+Progress is printed and written to `metrics.jsonl`: sample-weighted training loss,
+training seconds, images/second, loader wait time, CUDA peak allocated memory and
+optional validation precision/recall/F1. Training throughput excludes validation
+and checkpoint writing. Loader wait is host waiting time, not an exact measure of
+GPU idle time. Validation selects `trained_model_best.pth` by fixed-threshold F1;
+without validation only the final/numbered checkpoints are saved. No detector
+resume command is implemented; saved optimizer/scaler state is for future tooling.
+
+### Performance settings
+
+- CUDA uses pinned DataLoader memory and nonblocking host-to-device copies.
+- Workers persist across epochs and prefetch a bounded number of batches. They
+  use spawn for Windows/CUDA compatibility and limit OpenCV worker threading.
+- AMP keeps model weights in FP32, autocasts suitable CUDA operations and scales
+  gradients. Gradients are unscaled before clipping. Use `--precision fp32` to
+  compare convergence or diagnose numerical issues.
+- Gradients use `zero_grad(set_to_none=True)`; loss accumulation stays on the GPU
+  until the epoch report instead of calling `.item()` every batch.
+- `--cache-dir` stores **deterministic 640px RGB pixels only**, before random
+  augmentations. Its first pass decodes/resizes images; later reads reuse pixels.
+  Original-image box coordinates are scaled consistently. Augmentations remain
+  fresh, and annotation changes do not require rebuilding pixel caches.
+
+Put images and cache on a local SSD, not a slow network share. Cache entries use
+source absolute path, file size and nanosecond modification time for invalidation;
+keep source files immutable during runs. Clear/rebuild the cache if replacing
+images while preserving their timestamps and sizes. Old entries are not pruned
+automatically. Each image uses about **1.2 MB** (roughly 12 GB for 10,000 images).
+This trades disk space for less decoding; on small images/slow storage it may not
+help. Do not cache random augmentations or pre-normalized float tensors.
+
+Start with workers=4/prefetch=2, then compare workers=0/2/4/8 on your server.
+Persistent train and validation loaders each keep their own worker pool. More
+workers/prefetch consume more RAM and shared memory; increasing them is not always
+faster. First-epoch spawn/cache-fill overhead is expected. Compare later epochs
+using the same dataset, batch size and detector size. A seed aids repeatability,
+but different worker counts, library versions and GPU kernels can change results.
+
+`--detector-size 640` avoids upscaling the external 640px tensor to the historical
+800px backbone input. It reduces compute, but can alter tiny-ball recall. Compare
+validation results and use that same size for evaluation/deployment. We do not
+claim an RTX 5070 Ti speedup without an on-device benchmark. The implementation
+follows [PyTorch's tuning guidance](https://docs.pytorch.org/tutorials/recipes/recipes/tuning_guide.html)
+and [AMP gradient-clipping guidance](https://docs.pytorch.org/docs/stable/notes/amp_examples.html).
 
 ## 7. Find the model and use it in the application
 
@@ -231,8 +281,11 @@ For the 42-epoch example, the output directory contains:
 
 | Output | Contents / use |
 | --- | --- |
-| `checkpoint_epoch_10.pth`, `20`, `30`, `40`, and `42` | Model, optimizer and scheduler state, epoch and loss; saved every ten epochs and on the final epoch |
-| `trained_model_final.pth` | Final detector state dictionary; the simplest file to copy to the application |
+| `checkpoint_epoch_10.pth`, `20`, `30`, `40`, and `42` | Model, optimizer, scheduler and AMP scaler state, settings, epoch and loss; saved every ten epochs and on the final epoch |
+| `trained_model_final.pth` | Final detector state dictionary; may be worse than the best validation epoch |
+| `trained_model_best.pth` | Best validation F1 model plus configuration/metrics; present only with validation |
+| `run.json`, `metrics.jsonl` | Run settings, measured throughput, loss and held-out scores |
+| `train-records.json`, `validation-records.json` | Canonical labels used by the run (validation file only when supplied) |
 
 All numbered checkpoints use the full `checkpoint_epoch_N.pth` naming pattern.
 The backend can load either format for **inference**. Saved optimizer/scheduler
@@ -258,6 +311,18 @@ The existing 640px resize and external ImageNet normalization are preserved for
 checkpoint compatibility even though Faster R-CNN also normalizes internally.
 Changing that convention requires coordinated preprocessing changes and
 retraining, as described in the [backend guide](../backend/README.md).
+
+## Evaluate on an untouched test set
+
+```sh
+camman-evaluate-detector --model artifacts/detector_v1/trained_model_best.pth --annotations data/ball/test.clean.json --images data/ball/images --device cuda:0 --batch-size 4 --workers 4 --output artifacts/detector_v1/test.json
+```
+
+This uses unchanged images with no random augmentation and reports box
+precision/recall/F1 at confidence=0.5/IoU=0.5, not COCO mAP. Match your chosen
+`--detector-size` and confidence threshold; see [DATASET.md](DATASET.md) for the
+full test workflow. The command never updates weights and refuses to overwrite
+an existing report. Do not tune settings repeatedly on the final test games.
 
 ## Optional: generate and review more annotations
 
@@ -520,6 +585,7 @@ name for each). The DDPG implementation follows the
 
 | Location | Responsibility |
 | --- | --- |
+| [detection/evaluate.py](detection/evaluate.py), [detection/loading.py](detection/loading.py) | Held-out metrics, evaluation CLI and shared data-loader/precision settings |
 | [detection/train.py](detection/train.py) | Detector CLI, augmentation, optimizer, training loop and checkpoints |
 | [data/clean.py](data/clean.py) | Annotation parsing, coordinate conversion and validation |
 | [data/dataset.py](data/dataset.py) | Image/target loading, including multiple boxes and negative images |
@@ -545,13 +611,13 @@ name for each). The DDPG implementation follows the
 | Invalid boxes or no annotations | Check JSON structure, finite pixel coordinates, box width/height, and whether video entries are disabled |
 | Pretrained weights cannot download | Make the weights available through PyTorch's cache or use `--no-pretrained` for a deliberate run from random initialization |
 | Reviewer cannot open a window | Run it in a graphical session with Tk; server training itself does not need a display |
-| Low loss but poor game detection | Inspect labels and unseen-game predictions; the trainer currently reports training loss only |
+| Low loss but poor game detection | Inspect labels and held-out precision/recall; keep games disjoint and examine misses/false alarms |
 
 For tests, install the full development environment (including Qt for the test
 plugin), then run from the repository root:
 
 ```sh
-python -m pip install -e ".[frontend,training,dev]"
+python -m pip install -e ".[frontend,web,training,dev]"
 python -m pytest training/tests
 ```
 
