@@ -5,13 +5,14 @@ Run from the Camman repository root:
     python annotate_video.py "game.mp4" --model detector.pth --start 30 --end 60
 
 Start and end are seconds on the source's nominal FPS timeline (end exclusive).
-The review MP4 has a fixed frame rate and no audio. Review candidates.json
+The runner saves each extracted frame as PNG, then runs ball detection.
+Coordinates in predictions.json and candidates.json are source pixels in
+[x_min, y_min, x_max, y_max] order. The review MP4 has a fixed frame rate and no audio. Review candidates.json
 against the original frames before using it with camman-train --annotations
 and --images. Only detections become candidates; confirm negatives separately.
 """
 
 import argparse
-import csv
 import json
 import math
 import shutil
@@ -69,46 +70,55 @@ def annotate_video(video, model_path, output, *, start, end, confidence, device)
 
         count = 0
         candidates = []
-        with (output / "predictions.csv").open("w", newline="", encoding="utf-8") as stream:
-            report = csv.writer(stream)
-            report.writerow([
-                "clip_frame", "source_frame", "source_seconds", "image", "status", "confidence",
-                "x_min", "y_min", "x_max", "y_max", "center_x", "center_y",
-            ])
-            while ok:
-                source_index = first + count
-                name = f"frame_{source_index:09d}.jpg"
-                detections, preview = get_ball_detection(
-                    model, frame.copy(), transform, device, confidence, max_detections=1,
+        predictions = []
+        while ok:
+            source_index = first + count
+            name = f"frame_{source_index:09d}.png"
+            if not cv2.imwrite(str(frames_dir / name), frame):
+                raise OSError(f"Cannot write training image: {name}")
+            # PNG preserves the decoded pixels used for inference and training.
+            detections, preview = get_ball_detection(
+                model, frame, transform, device, confidence, max_detections=1,
+            )
+            if pad_bottom or pad_right:
+                preview = cv2.copyMakeBorder(
+                    preview, 0, pad_bottom, 0, pad_right, cv2.BORDER_CONSTANT,
                 )
-                if not cv2.imwrite(str(frames_dir / name), frame):
-                    raise OSError(f"Cannot write training image: {name}")
-                if pad_bottom or pad_right:
-                    preview = cv2.copyMakeBorder(
-                        preview, 0, pad_bottom, 0, pad_right, cv2.BORDER_CONSTANT,
-                    )
-                writer.write(preview)
-                row = [count, source_index, f"{source_index / fps:.9f}", name]
-                if detections:
-                    detection = detections[0]
-                    x1, y1, x2, y2 = detection["box"]
-                    candidates.append({"frame": name, "boxes": [[x1, y1, x2, y2]]})
-                    row.extend(["detected", detection["score"], x1, y1, x2, y2,
-                                (x1 + x2) / 2, (y1 + y2) / 2])
-                else:
-                    row.extend(["no_detection", "", "", "", "", "", "", ""])
-                report.writerow(row)
-                count += 1
-                if count % 100 == 0:
-                    print(f"Processed {count} frames on {device}", flush=True)
-                if stop is not None and first + count >= stop:
-                    break
-                ok, frame = capture.read()
+            writer.write(preview)
+            prediction = {
+                "frame": name,
+                "clip_frame": count,
+                "source_frame": source_index,
+                "source_seconds": source_index / fps,
+                "status": "no_detection",
+                "ball": None,
+            }
+            if detections:
+                detection = detections[0]
+                x1, y1, x2, y2 = detection["box"]
+                box = [x1, y1, x2, y2]
+                prediction["status"] = "detected"
+                prediction["ball"] = {
+                    "box": box,
+                    "center": [(x1 + x2) / 2, (y1 + y2) / 2],
+                    "confidence": detection["score"],
+                }
+                candidates.append({"frame": name, "boxes": [box]})
+            predictions.append(prediction)
+            count += 1
+            if count % 100 == 0:
+                print(f"Processed {count} frames on {device}", flush=True)
+            if stop is not None and first + count >= stop:
+                break
+            ok, frame = capture.read()
 
         writer.release()
         writer = None
         if (output / "annotated.mp4").stat().st_size == 0:
             raise OSError(f"MP4 encoder produced an empty file in {output}")
+        (output / "predictions.json").write_text(
+            json.dumps(predictions, indent=2) + "\n", encoding="utf-8",
+        )
         (output / "candidates.json").write_text(
             json.dumps(candidates, indent=2) + "\n", encoding="utf-8",
         )
